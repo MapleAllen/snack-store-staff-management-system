@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">门店工资助手</title>
+  <rect width="512" height="512" rx="112" fill="#084b57"/>
+  <path d="M128 112h256a32 32 0 0 1 32 32v224a32 32 0 0 1-32 32H128a32 32 0 0 1-32-32V144a32 32 0 0 1 32-32Z" fill="#f7fbfb" opacity=".16"/>
+  <path d="M176 176h160M256 176v176M192 240h128M192 304h128" fill="none" stroke="#f7fbfb" stroke-width="28" stroke-linecap="round"/>
+</svg>

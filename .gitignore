@@ -1,0 +1,30 @@
+# Dependencies and local package-manager state
+node_modules/
+.npm-cache/
+.npmrc
+
+# Build and packaging output
+dist/
+release/
+coverage/
+.vite/
+
+# Local QA and automation output
+artifacts/
+screenshots/
+playwright-report/
+test-results/
+audit-*/
+design-compare.*
+final-screenshot.*
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Logs and OS metadata
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db

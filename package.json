@@ -1,0 +1,78 @@
+{
+  "name": "store-payroll-manager",
+  "version": "2.0.0",
+  "description": "面向小型多门店经营者的本地工资管理桌面应用",
+  "author": "MapleAllen",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MapleAllen/snack-store-staff-management-system.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MapleAllen/snack-store-staff-management-system/issues"
+  },
+  "homepage": "https://github.com/MapleAllen/snack-store-staff-management-system#readme",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "test": "vitest run",
+    "check": "npm run test && npm run build",
+    "preview": "vite preview --host 127.0.0.1",
+    "electron:dev": "node scripts/electron-dev.mjs",
+    "package:win": "npm run build && electron-builder --win --x64 --dir",
+    "dist:win": "npm run build && electron-builder --win nsis --x64"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@vitejs/plugin-react": "5.0.4",
+    "electron": "^42.4.1",
+    "electron-builder": "^26.15.3",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "vite": "^6.4.3",
+    "vitest": "^3.2.6"
+  },
+  "build": {
+    "appId": "io.github.mapleallen.store-payroll",
+    "productName": "门店工资助手",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "shared/**/*",
+      "LICENSE",
+      "THIRD_PARTY_NOTICES.md",
+      "package.json"
+    ],
+    "win": {
+      "icon": "public/app-icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName} Setup ${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "门店工资助手",
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}
