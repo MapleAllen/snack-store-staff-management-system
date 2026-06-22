@@ -1,14 +1,25 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
-const REASON_LABELS = {
-  "daily-startup": "每日启动恢复点",
-  "before-restore": "恢复数据前",
-  "month-close": "工资月结后",
-  manual: "手动恢复点",
-};
+
+let sharedModule;
+
+async function loadShared() {
+  if (!sharedModule) sharedModule = await import("../shared/backup-format.js");
+  return sharedModule;
+}
+
+async function getReasonLabelMap() {
+  const { BACKUP_REASON_LABELS } = await loadShared();
+  return BACKUP_REASON_LABELS;
+}
+
+async function isValidReason(reason) {
+  const { BACKUP_REASONS } = await loadShared();
+  return Object.values(BACKUP_REASONS).includes(reason);
+}
 
 async function validatePayload(payload) {
-  const { validateBackupPayload } = await import("../shared/backup-format.js");
+  const { validateBackupPayload } = await loadShared();
   return validateBackupPayload(payload);
 }
 
@@ -20,6 +31,7 @@ function createBackupStore({ baseDir, maxBackups = 10, now = () => new Date() })
     await fs.mkdir(backupDir, { recursive: true });
     const entries = await fs.readdir(backupDir, { withFileTypes: true });
     const backups = [];
+    const reasonLabels = await getReasonLabelMap();
     for (const entry of entries) {
       if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
       try {
@@ -29,7 +41,7 @@ function createBackupStore({ baseDir, maxBackups = 10, now = () => new Date() })
           id: entry.name,
           createdAt: payload.exportedAt,
           reason: payload.reason ?? "manual",
-          reasonLabel: REASON_LABELS[payload.reason] ?? "自动恢复点",
+          reasonLabel: reasonLabels[payload.reason] ?? "自动恢复点",
           size: stat.size,
         });
       } catch {
@@ -41,12 +53,13 @@ function createBackupStore({ baseDir, maxBackups = 10, now = () => new Date() })
 
   async function createInternal(payload, reason = "manual") {
     await validatePayload(payload);
-    if (!Object.hasOwn(REASON_LABELS, reason)) throw new Error("备份原因无效");
+    if (!(await isValidReason(reason))) throw new Error("备份原因无效");
     await fs.mkdir(backupDir, { recursive: true });
     const date = now();
     const dayPrefix = date.toISOString().slice(0, 10);
     const existing = await list();
-    if (reason === "daily-startup") {
+    const { BACKUP_REASONS: reasons } = await loadShared();
+    if (reason === reasons.DAILY_STARTUP) {
       const today = existing.find((item) => item.reason === reason && item.createdAt?.startsWith(dayPrefix));
       if (today) return today;
     }

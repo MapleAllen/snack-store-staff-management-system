@@ -34,6 +34,8 @@ import {
   unlockStoreMonth,
 } from "./workspaceOperations.js";
 import { Modal } from "./components/Modal.jsx";
+import { LockScreen } from "./components/LockScreen.jsx";
+import { RecoveryScreen } from "./components/RecoveryScreen.jsx";
 import { HomePage } from "./pages/HomePage.jsx";
 import { EmployeesPage } from "./pages/EmployeesPage.jsx";
 import { AttendancePage } from "./pages/AttendancePage.jsx";
@@ -43,9 +45,11 @@ import { PayrollPage } from "./pages/PayrollPage.jsx";
 import {
   BACKUP_TYPE,
   STORAGE_KEY,
+  BACKUP_REASONS,
   validateBackupFileSize,
   validateBackupPayload,
 } from "../shared/backup-format.js";
+import { loadWorkspace, saveWorkspace, getStorageStatus, isDesktopStorage } from "./storageAdapter.js";
 
 const APP_VERSION = __APP_VERSION__;
 const NAV_ITEMS = [
@@ -62,16 +66,45 @@ function makeId(prefix) {
   return `${prefix}-${value}`;
 }
 
-function loadWorkspace() {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return createInitialWorkspace();
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed?.stores) || !parsed?.monthlyRecords) return createInitialWorkspace();
-    return migrateWorkspace(parsed);
-  } catch {
-    return createInitialWorkspace();
-  }
+async function deriveKeyFromPassphrase(passphrase, salt) {
+  const encoder = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw", encoder.encode(passphrase), "PBKDF2", false, ["deriveKey"],
+  );
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt: encoder.encode(salt), iterations: 100_000, hash: "SHA-256" },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"],
+  );
+}
+
+async function encryptPayload(payload, passphrase) {
+  const salt = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKeyFromPassphrase(passphrase, salt);
+  const encoder = new TextEncoder();
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    encoder.encode(JSON.stringify(payload)),
+  );
+  const ctHex = Array.from(new Uint8Array(ciphertext), (b) => b.toString(16).padStart(2, "0")).join("");
+  const ivHex = Array.from(iv, (b) => b.toString(16).padStart(2, "0")).join("");
+  return { salt, iv: ivHex, ctHex };
+}
+
+async function decryptPayload(encrypted, passphrase) {
+  const key = await deriveKeyFromPassphrase(passphrase, encrypted.salt);
+  const iv = new Uint8Array(encrypted.iv.match(/.{2}/g).map((b) => parseInt(b, 16)));
+  const ciphertext = new Uint8Array(encrypted.ctHex.match(/.{2}/g).map((b) => parseInt(b, 16)));
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv },
+    key,
+    ciphertext,
+  );
+  return new TextDecoder().decode(decrypted);
 }
 
 function makeBackupPayload(workspace) {
@@ -85,12 +118,13 @@ function makeBackupPayload(workspace) {
 }
 
 export function App() {
-  const initialWorkspace = useMemo(loadWorkspace, []);
+  const fallbackWorkspace = useMemo(createInitialWorkspace, []);
+  const [loadedWorkspace, setLoadedWorkspace] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+  const [appLocked, setAppLocked] = useState(null);
   const currentMonth = createDefaultMonthValue();
-  const [workspace, setWorkspace] = useState(initialWorkspace);
-  const [activeStoreId, setActiveStoreId] = useState(
-    initialWorkspace.stores.find((store) => store.status === "active")?.id ?? "",
-  );
+  const [workspace, setWorkspace] = useState(fallbackWorkspace);
+  const [activeStoreId, setActiveStoreId] = useState("");
   const [activeMonth, setActiveMonth] = useState(currentMonth);
   const [activePage, setActivePage] = useState("home");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
@@ -111,19 +145,61 @@ export function App() {
   const desktopApi = window.payrollDesktop;
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(workspace));
-      setSaveState({ status: "saved", savedAt: new Date().toISOString() });
-    } catch {
-      setSaveState({ status: "error", savedAt: null });
-      setNotice("自动保存失败，请立即导出数据备份");
+    let cancelled = false;
+    async function boot() {
+      const result = await loadWorkspace();
+      if (cancelled) return;
+
+      if (result.recoveryState === "corrupt-fallback") {
+        setLoadError("corrupt");
+        setLoadedWorkspace(null);
+        return;
+      }
+
+      const ws = result.workspace ?? fallbackWorkspace;
+      setLoadedWorkspace(ws);
+      setWorkspace(ws);
+      setActiveStoreId(ws.stores.find((store) => store.status === "active")?.id ?? "");
+
+      if (desktopApi) {
+        try {
+          const lockStatus = await desktopApi.getLockStatus();
+          if (!cancelled) setAppLocked(lockStatus.locked);
+        } catch {
+          if (!cancelled) setAppLocked(false);
+        }
+      } else {
+        setAppLocked(false);
+      }
     }
+    boot();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!loadedWorkspace) return;
+    let cancelled = false;
+    saveWorkspace(workspace).then((result) => {
+      if (cancelled) return;
+      if (result.status === "error") {
+        setSaveState({ status: "error", savedAt: null });
+        setNotice("自动保存失败，请立即导出数据备份");
+      } else {
+        setSaveState({ status: "saved", savedAt: result.savedAt ?? new Date().toISOString() });
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setSaveState({ status: "error", savedAt: null });
+        setNotice("自动保存失败，请立即导出数据备份");
+      }
+    });
+    return () => { cancelled = true; };
   }, [workspace]);
 
   useEffect(() => {
-    if (!desktopApi) return;
+    if (!desktopApi || !loadedWorkspace) return;
     let cancelled = false;
-    desktopApi.createBackup(makeBackupPayload(initialWorkspace), "daily-startup")
+    desktopApi.createBackup(makeBackupPayload(loadedWorkspace), BACKUP_REASONS.DAILY_STARTUP)
       .then(() => desktopApi.listBackups())
       .then((backups) => { if (!cancelled) setAutoBackups(backups); })
       .catch(() => { if (!cancelled) setNotice("自动恢复点创建失败，请导出手动备份"); });
@@ -266,7 +342,7 @@ export function App() {
     setWorkspace(next);
     setCloseModal(null);
     setNotice("本店本月工资已月结");
-    await createAutomaticBackup("month-close", next);
+    await createAutomaticBackup(BACKUP_REASONS.MONTH_CLOSE, next);
   }
 
   function confirmUnlockPayroll(event) {
@@ -375,23 +451,56 @@ export function App() {
     setNotice(isFormal ? "正式工资表已导出" : "草稿工资表已导出，月结后再用于发薪");
   }
 
-  function exportWorkspaceBackup() {
-    const payload = makeBackupPayload(workspace);
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `门店工资助手-数据备份-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    setNotice("数据备份已导出");
+  function exportWorkspaceBackup(passphrase) {
+    async function doExport() {
+      const payload = makeBackupPayload(workspace);
+      let json;
+      if (passphrase) {
+        const { salt, iv, ctHex } = await encryptPayload(payload, passphrase);
+        const envelope = {
+          type: BACKUP_TYPE,
+          version: APP_VERSION,
+          storageKey: STORAGE_KEY,
+          exportedAt: new Date().toISOString(),
+          reason: BACKUP_REASONS.MANUAL,
+          protected: true,
+          salt,
+          iv,
+          data: ctHex,
+        };
+        json = JSON.stringify(envelope, null, 2);
+      } else {
+        json = JSON.stringify(payload, null, 2);
+      }
+      const blob = new Blob([json], { type: "application/json;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `门店工资助手-数据备份-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setNotice(passphrase ? "加密备份已导出" : "数据备份已导出");
+    }
+    doExport().catch(() => setNotice("备份导出失败"));
   }
 
-  async function prepareWorkspaceRestore(file) {
+  async function prepareWorkspaceRestore(file, passphrase) {
     if (!file) return;
     try {
       validateBackupFileSize(file.size);
-      const payload = JSON.parse(await file.text());
+      const raw = await file.text();
+      let payload = JSON.parse(raw);
+
+      if (payload.protected) {
+        if (!passphrase) return setNotice("此备份已加密，请输入口令");
+        try {
+          const decrypted = await decryptPayload(payload, passphrase);
+          payload = JSON.parse(decrypted);
+        } catch {
+          return setNotice("口令不正确或备份已损坏");
+        }
+      }
+
       validateBackupPayload(payload);
       const data = migrateWorkspace(payload.data);
       if (!Array.isArray(data.employees) || !Array.isArray(data.assignments)) return setNotice("备份数据结构不完整");
@@ -415,7 +524,7 @@ export function App() {
   async function confirmWorkspaceRestore() {
     const next = restoreModal?.data;
     if (!next) return;
-    const safetyBackup = await createAutomaticBackup("before-restore", workspace);
+    const safetyBackup = await createAutomaticBackup(BACKUP_REASONS.BEFORE_RESTORE, workspace);
     if (desktopApi && !safetyBackup) return;
     setWorkspace(next);
     setActiveStoreId(next.stores.find((store) => store.status === "active")?.id ?? "");
@@ -426,7 +535,7 @@ export function App() {
 
   async function confirmDemoWorkspaceReset() {
     const next = createInitialWorkspace();
-    const safetyBackup = await createAutomaticBackup("before-demo-reset", workspace);
+    const safetyBackup = await createAutomaticBackup(BACKUP_REASONS.BEFORE_DEMO_RESET, workspace);
     if (desktopApi && !safetyBackup) return;
     setWorkspace(next);
     setActiveStoreId(next.stores.find((store) => store.status === "active")?.id ?? "");
@@ -554,6 +663,54 @@ export function App() {
     setNotice(`调店计划已保存，将于 ${draft.effectiveMonth} 生效`);
   }
 
+  if (appLocked === null && loadedWorkspace === null && loadError === null) {
+    return <div className="app-empty">正在启动…</div>;
+  }
+
+  if (appLocked === null && loadedWorkspace === null && loadError === null) {
+    return <div className="app-empty">正在启动…</div>;
+  }
+
+  if (loadError === "corrupt") {
+    return (
+      <>
+        <RecoveryScreen
+          recoveryState="corrupt-fallback"
+          onRestore={() => {
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = "application/json,.json";
+            input.onchange = (event) => {
+              const file = event.target.files?.[0];
+              if (file) prepareWorkspaceRestore(file);
+            };
+            input.click();
+          }}
+          onExportCorrupt={() => {
+            setNotice("请从系统设置中导出或联系支持");
+          }}
+          onReset={async () => {
+            const next = createInitialWorkspace();
+            await saveWorkspace(next);
+            setWorkspace(next);
+            setActiveStoreId(next.stores.find((store) => store.status === "active")?.id ?? "");
+            setLoadError(null);
+            setLoadedWorkspace(next);
+            setActiveMonth(createDefaultMonthValue());
+            setActivePage("home");
+            setNotice("已重置为演示工作区");
+          }}
+        />
+        {notice ? <div className="toast" role="status" aria-live="polite">{notice}</div> : null}
+        {restoreModal ? <Modal title="恢复备份数据" onClose={() => setRestoreModal(null)}><div className="modal-form"><div className="modal-summary"><strong>即将覆盖当前工资系统数据</strong><span>备份版本：{restoreModal.version ?? "未知"} · 门店数量：{restoreModal.storeCount} 家</span><span>导出时间：{restoreModal.exportedAt ? new Date(restoreModal.exportedAt).toLocaleString("zh-CN") : "未知"}</span></div><p className="modal-copy">旧版备份会自动升级，恢复后保留全部门店、员工及工资记录。</p><div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setRestoreModal(null)}>取消</button><button className="primary-button" type="button" onClick={confirmWorkspaceRestore}>确认恢复</button></div></div></Modal> : null}
+      </>
+    );
+  }
+
+  if (appLocked) {
+    return <LockScreen onUnlock={() => setAppLocked(false)} />;
+  }
+
   if (!activeStoreView) return <div className="app-empty">没有可用门店，请从备份恢复数据。</div>;
 
   return (
@@ -579,7 +736,7 @@ export function App() {
         {activePage === "employees" ? <EmployeesPage workspace={workspace} store={activeStore} currentMonth={currentMonth} onCreate={() => setEmployeeModal({ mode: "create", draft: createEmployeeDraft() })} onEdit={(employee) => setEmployeeModal({ mode: "edit", employeeId: employee.id, draft: createEmployeeDraft(employee) })} onToggleResignation={handleToggleResignation} onTransfer={openTransferModal} /> : null}
         {activePage === "attendance" ? <AttendancePage store={activeStore} activeMonth={activeMonth} rows={payrollRows} patchEntry={patchMonthlyEntry} toggleComplete={toggleEntryComplete} isLocked={isLocked} onNavigate={setActivePage} /> : null}
         {activePage === "reports" ? <ReportsPage workspace={workspace} activeMonth={activeMonth} setActiveMonth={setActiveMonth} onSelectStore={setActiveStoreId} onNavigate={setActivePage} /> : null}
-        {activePage === "settings" ? <SettingsPage store={activeStore} stores={workspace.stores} patchConfig={patchStoreConfig} appVersion={APP_VERSION} onExportBackup={exportWorkspaceBackup} onImportBackup={prepareWorkspaceRestore} onCreateStore={() => setStoreModal({ mode: "create", name: "" })} onEditStore={(store) => setStoreModal({ mode: "edit", storeId: store.id, name: store.name })} onArchiveStore={requestArchiveStore} onRestoreStore={restoreStore} autoBackups={autoBackups} autoBackupAvailable={Boolean(desktopApi)} autoBackupBusy={autoBackupBusy} onCreateAutoBackup={() => createAutomaticBackup("manual")} onRestoreAutoBackup={prepareAutomaticRestore} onResetDemoWorkspace={() => setDemoResetModal(true)} ruleHistory={(workspace.ruleHistory ?? []).filter((record) => record.storeId === activeStore.id)} /> : null}
+        {activePage === "settings" ? <SettingsPage store={activeStore} stores={workspace.stores} patchConfig={patchStoreConfig} appVersion={APP_VERSION} onExportBackup={exportWorkspaceBackup} onImportBackup={prepareWorkspaceRestore} onCreateStore={() => setStoreModal({ mode: "create", name: "" })} onEditStore={(store) => setStoreModal({ mode: "edit", storeId: store.id, name: store.name })} onArchiveStore={requestArchiveStore} onRestoreStore={restoreStore} autoBackups={autoBackups} autoBackupAvailable={Boolean(desktopApi)} autoBackupBusy={autoBackupBusy} onCreateAutoBackup={() => createAutomaticBackup(BACKUP_REASONS.MANUAL)} onRestoreAutoBackup={prepareAutomaticRestore} onRequestLock={() => setAppLocked(true)} onResetDemoWorkspace={() => setDemoResetModal(true)} ruleHistory={(workspace.ruleHistory ?? []).filter((record) => record.storeId === activeStore.id)} /> : null}
         {activePage === "payroll" ? <PayrollPage activeStore={activeStoreView} activeMonth={activeMonth} setActiveMonth={setActiveMonth} exportCurrentMonth={exportCurrentMonth} totalNetSalary={totalNetSalary} forecastNetSalary={forecastNetSalary} payrollRows={payrollRows} touchedRows={touchedRows} exceptionCount={exceptionCount} completionRate={completionRate} monthlyStore={monthlyStore} selectedRow={selectedRow} setSelectedEmployeeId={setSelectedEmployeeId} patchMonthlyEntry={patchMonthlyEntry} toggleEntryComplete={toggleEntryComplete} setEmployeeModal={setEmployeeModal} openAdjustmentModal={openAdjustmentModal} isLocked={isLocked} onClosePayroll={requestClosePayroll} onUnlockPayroll={() => setUnlockModal({ reason: "" })} /> : null}
       </main>
 

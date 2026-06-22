@@ -3,6 +3,22 @@ export const LEGACY_BACKUP_TYPES = new Set(["zhaoyiming-payroll-backup"]);
 export const STORAGE_KEY = "payroll-workspace-v1";
 export const MAX_BACKUP_BYTES = 25 * 1024 * 1024;
 
+export const BACKUP_REASONS = Object.freeze({
+  DAILY_STARTUP: "daily-startup",
+  BEFORE_RESTORE: "before-restore",
+  MONTH_CLOSE: "month-close",
+  BEFORE_DEMO_RESET: "before-demo-reset",
+  MANUAL: "manual",
+});
+
+export const BACKUP_REASON_LABELS = Object.freeze({
+  [BACKUP_REASONS.DAILY_STARTUP]: "每日启动恢复点",
+  [BACKUP_REASONS.BEFORE_RESTORE]: "恢复数据前",
+  [BACKUP_REASONS.MONTH_CLOSE]: "工资月结后",
+  [BACKUP_REASONS.BEFORE_DEMO_RESET]: "演示重置前",
+  [BACKUP_REASONS.MANUAL]: "手动恢复点",
+});
+
 function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

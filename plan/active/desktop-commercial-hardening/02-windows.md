@@ -1,9 +1,9 @@
 # Windows Implementation and Verification
 
-Owner: TBD
+Owner: Codex / macOS host
 Dependencies: Shared contracts frozen
 Working branch: `main`
-Starting SHA: RESOLVE AND RECORD BEFORE SOURCE EDITS
+Starting SHA: `2073ca3b16a8e64b26c1e06932a2db646f80dceb`
 
 ## Allowed Files
 
