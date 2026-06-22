@@ -130,7 +130,7 @@ app.whenReady().then(async () => {
     pinSet: lockPinHash !== null,
   }));
 
-  ipcMain.handle("lock:set-pin", (_event, pin, oldPin) => {
+  ipcMain.handle("lock:set-pin", async (_event, pin, oldPin) => {
     if (typeof pin !== "string" || !/^\d{4,6}$/.test(pin)) {
       throw Object.assign(new Error("PIN 必须为 4-6 位数字"), { code: "lock:pin-format-invalid" });
     }
@@ -144,7 +144,7 @@ app.whenReady().then(async () => {
     lockPinSalt = salt;
     failedAttempts = 0;
     cooldownUntil = null;
-    saveLockState(userDataPath);
+    await saveLockState(userDataPath);
     return { success: true };
   });
 
@@ -173,7 +173,7 @@ app.whenReady().then(async () => {
     return { success: true };
   });
 
-  ipcMain.handle("lock:clear-pin", (_event, pin) => {
+  ipcMain.handle("lock:clear-pin", async (_event, pin) => {
     if (!lockPinHash || !lockPinSalt) return { success: true };
     if (!verifyPin(pin)) {
       throw Object.assign(new Error("PIN 不正确"), { code: "lock:pin-invalid" });
@@ -182,7 +182,7 @@ app.whenReady().then(async () => {
     lockPinSalt = null;
     failedAttempts = 0;
     cooldownUntil = null;
-    saveLockState(userDataPath);
+    await saveLockState(userDataPath);
     return { success: true };
   });
 

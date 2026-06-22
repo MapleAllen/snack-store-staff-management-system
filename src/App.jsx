@@ -98,7 +98,8 @@ async function encryptPayload(payload, passphrase) {
 async function decryptPayload(encrypted, passphrase) {
   const key = await deriveKeyFromPassphrase(passphrase, encrypted.salt);
   const iv = new Uint8Array(encrypted.iv.match(/.{2}/g).map((b) => parseInt(b, 16)));
-  const ciphertext = new Uint8Array(encrypted.ctHex.match(/.{2}/g).map((b) => parseInt(b, 16)));
+  const ctHex = encrypted.ctHex ?? encrypted.data;
+  const ciphertext = new Uint8Array(ctHex.match(/.{2}/g).map((b) => parseInt(b, 16)));
   const decrypted = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv },
     key,
@@ -142,6 +143,8 @@ export function App() {
   const [saveState, setSaveState] = useState({ status: "saved", savedAt: null });
   const [autoBackups, setAutoBackups] = useState([]);
   const [autoBackupBusy, setAutoBackupBusy] = useState(false);
+  const [recoveryPassphrase, setRecoveryPassphrase] = useState("");
+  const [recoveryFile, setRecoveryFile] = useState(null);
   const desktopApi = window.payrollDesktop;
 
   useEffect(() => {
@@ -672,6 +675,32 @@ export function App() {
   }
 
   if (loadError === "corrupt") {
+    async function handleRecoveryFileSelected(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      try {
+        validateBackupFileSize(file.size);
+        const raw = await file.text();
+        const parsed = JSON.parse(raw);
+        if (parsed.protected) {
+          setRecoveryFile(file);
+          setRecoveryPassphrase("");
+        } else {
+          prepareWorkspaceRestore(file);
+        }
+      } catch {
+        setNotice("文件不是工资系统备份");
+      }
+    }
+
+    function handleRecoveryPassphraseSubmit(event) {
+      event.preventDefault();
+      if (!recoveryFile || !recoveryPassphrase) return;
+      prepareWorkspaceRestore(recoveryFile, recoveryPassphrase);
+      setRecoveryFile(null);
+      setRecoveryPassphrase("");
+    }
+
     return (
       <>
         <RecoveryScreen
@@ -680,10 +709,7 @@ export function App() {
             const input = document.createElement("input");
             input.type = "file";
             input.accept = "application/json,.json";
-            input.onchange = (event) => {
-              const file = event.target.files?.[0];
-              if (file) prepareWorkspaceRestore(file);
-            };
+            input.onchange = handleRecoveryFileSelected;
             input.click();
           }}
           onExportCorrupt={() => {
@@ -701,6 +727,18 @@ export function App() {
             setNotice("已重置为演示工作区");
           }}
         />
+        {recoveryFile ? (
+          <div className="lock-screen">
+            <div className="lock-screen__card">
+              <h1>此备份已加密</h1>
+              <p>请输入备份口令以恢复数据</p>
+              <form className="modal-form" onSubmit={handleRecoveryPassphraseSubmit}>
+                <label className="field"><span>备份口令</span><input autoFocus type="password" value={recoveryPassphrase} onChange={(e) => setRecoveryPassphrase(e.target.value)} /></label>
+                <div className="modal-actions"><button className="secondary-button" type="button" onClick={() => { setRecoveryFile(null); setRecoveryPassphrase(""); }}>取消</button><button className="primary-button" type="submit" disabled={!recoveryPassphrase}>确认</button></div>
+              </form>
+            </div>
+          </div>
+        ) : null}
         {notice ? <div className="toast" role="status" aria-live="polite">{notice}</div> : null}
         {restoreModal ? <Modal title="恢复备份数据" onClose={() => setRestoreModal(null)}><div className="modal-form"><div className="modal-summary"><strong>即将覆盖当前工资系统数据</strong><span>备份版本：{restoreModal.version ?? "未知"} · 门店数量：{restoreModal.storeCount} 家</span><span>导出时间：{restoreModal.exportedAt ? new Date(restoreModal.exportedAt).toLocaleString("zh-CN") : "未知"}</span></div><p className="modal-copy">旧版备份会自动升级，恢复后保留全部门店、员工及工资记录。</p><div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setRestoreModal(null)}>取消</button><button className="primary-button" type="button" onClick={confirmWorkspaceRestore}>确认恢复</button></div></div></Modal> : null}
       </>
