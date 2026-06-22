@@ -1,5 +1,11 @@
 name: CI
 
+# This workflow verifies build, test, and audit on every push and pull request.
+# CI success signals that the codebase compiles and passes automated checks.
+# It does NOT validate interactive desktop behavior (PIN lock, workspace file
+# migration, real-host install/upgrade/recovery). Those require manual
+# verification on a real Windows x64 machine. See CONTRIBUTING.md.
+
 on:
   push:
     branches: [main]

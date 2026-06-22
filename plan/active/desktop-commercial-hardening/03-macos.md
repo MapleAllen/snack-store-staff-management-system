@@ -1,9 +1,9 @@
 # macOS Coordination, Review Support, and Documentation Preparation
 
-Owner: TBD
+Owner: Codex / macOS host
 Dependencies: Shared contracts frozen; Windows implementation reviewed at least once
 Working branch: `main`
-Starting SHA: RESOLVE AND RECORD BEFORE SOURCE EDITS
+Starting SHA: `e4418023bbb46c9a1263ef985f090f0e99d0c4c8`
 
 ## Allowed Files
 
