@@ -104,6 +104,7 @@ export function App() {
   const [transferModal, setTransferModal] = useState(null);
   const [closeModal, setCloseModal] = useState(null);
   const [unlockModal, setUnlockModal] = useState(null);
+  const [demoResetModal, setDemoResetModal] = useState(false);
   const [saveState, setSaveState] = useState({ status: "saved", savedAt: null });
   const [autoBackups, setAutoBackups] = useState([]);
   const [autoBackupBusy, setAutoBackupBusy] = useState(false);
@@ -137,6 +138,7 @@ export function App() {
 
   const activeStores = workspace.stores.filter((store) => store.status === "active");
   const activeStore = activeStores.find((store) => store.id === activeStoreId) ?? activeStores[0];
+  const currentFeature = NAV_ITEMS.find((item) => item.id === activePage) ?? NAV_ITEMS[0];
   const activeEmployees = activeStore ? getEmployeesForStore(workspace, activeStore.id, activeMonth) : [];
   const activeAdjustments = activeStore
     ? workspace.adjustments.filter((record) => record.storeId === activeStore.id)
@@ -422,6 +424,19 @@ export function App() {
     setNotice("备份数据已恢复并升级至新版结构");
   }
 
+  async function confirmDemoWorkspaceReset() {
+    const next = createInitialWorkspace();
+    const safetyBackup = await createAutomaticBackup("before-demo-reset", workspace);
+    if (desktopApi && !safetyBackup) return;
+    setWorkspace(next);
+    setActiveStoreId(next.stores.find((store) => store.status === "active")?.id ?? "");
+    setActiveMonth(createDefaultMonthValue());
+    setActivePage("home");
+    setSelectedEmployeeId("");
+    setDemoResetModal(false);
+    setNotice("已恢复为泛化演示工作区");
+  }
+
   function submitEmployee(event) {
     event.preventDefault();
     const name = employeeModal.draft.name.trim();
@@ -545,12 +560,16 @@ export function App() {
     <div className="app-shell">
       <main className="workspace">
         <header className="topbar">
-          <div className="topbar__brand"><img className="topbar__logo" src="/app-icon.svg" alt="" /><div><strong>门店工资助手</strong><span>分屏核算工作台</span></div></div>
+          <div className="topbar__brand"><img className="topbar__logo" src="/app-icon.svg" alt="" /><div><strong>门店工资助手</strong><span>老板结薪工作台</span></div></div>
           <nav className="topbar__nav" aria-label="主导航">
             {NAV_ITEMS.map((item) => <button key={item.id} aria-current={item.id === activePage ? "page" : undefined} className={item.id === activePage ? "topbar__nav-item is-active" : "topbar__nav-item"} type="button" onClick={() => setActivePage(item.id)}>{item.label}</button>)}
           </nav>
           <label className="topbar__nav-select"><span>当前功能</span><select value={activePage} onChange={(event) => setActivePage(event.target.value)}>{NAV_ITEMS.map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}</select></label>
           <div className="topbar__aside">
+            <div className="topbar__feature">
+              <span>当前功能</span>
+              <strong>{currentFeature.label}</strong>
+            </div>
             <label className="store-select"><span>当前门店</span><select aria-label="当前门店" value={activeStore.id} onChange={(event) => setActiveStoreId(event.target.value)}>{activeStores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label>
             <div className={saveState.status === "error" ? "autosave-status is-error" : "autosave-status"}><span>{saveState.status === "error" ? "保存失败" : "已自动保存"}</span><strong>{saveState.savedAt ? formatTimestamp(saveState.savedAt) : "正在保存"}</strong></div>
           </div>
@@ -560,7 +579,7 @@ export function App() {
         {activePage === "employees" ? <EmployeesPage workspace={workspace} store={activeStore} currentMonth={currentMonth} onCreate={() => setEmployeeModal({ mode: "create", draft: createEmployeeDraft() })} onEdit={(employee) => setEmployeeModal({ mode: "edit", employeeId: employee.id, draft: createEmployeeDraft(employee) })} onToggleResignation={handleToggleResignation} onTransfer={openTransferModal} /> : null}
         {activePage === "attendance" ? <AttendancePage store={activeStore} activeMonth={activeMonth} rows={payrollRows} patchEntry={patchMonthlyEntry} toggleComplete={toggleEntryComplete} isLocked={isLocked} onNavigate={setActivePage} /> : null}
         {activePage === "reports" ? <ReportsPage workspace={workspace} activeMonth={activeMonth} setActiveMonth={setActiveMonth} onSelectStore={setActiveStoreId} onNavigate={setActivePage} /> : null}
-        {activePage === "settings" ? <SettingsPage store={activeStore} stores={workspace.stores} patchConfig={patchStoreConfig} appVersion={APP_VERSION} onExportBackup={exportWorkspaceBackup} onImportBackup={prepareWorkspaceRestore} onCreateStore={() => setStoreModal({ mode: "create", name: "" })} onEditStore={(store) => setStoreModal({ mode: "edit", storeId: store.id, name: store.name })} onArchiveStore={requestArchiveStore} onRestoreStore={restoreStore} autoBackups={autoBackups} autoBackupAvailable={Boolean(desktopApi)} autoBackupBusy={autoBackupBusy} onCreateAutoBackup={() => createAutomaticBackup("manual")} onRestoreAutoBackup={prepareAutomaticRestore} ruleHistory={(workspace.ruleHistory ?? []).filter((record) => record.storeId === activeStore.id)} /> : null}
+        {activePage === "settings" ? <SettingsPage store={activeStore} stores={workspace.stores} patchConfig={patchStoreConfig} appVersion={APP_VERSION} onExportBackup={exportWorkspaceBackup} onImportBackup={prepareWorkspaceRestore} onCreateStore={() => setStoreModal({ mode: "create", name: "" })} onEditStore={(store) => setStoreModal({ mode: "edit", storeId: store.id, name: store.name })} onArchiveStore={requestArchiveStore} onRestoreStore={restoreStore} autoBackups={autoBackups} autoBackupAvailable={Boolean(desktopApi)} autoBackupBusy={autoBackupBusy} onCreateAutoBackup={() => createAutomaticBackup("manual")} onRestoreAutoBackup={prepareAutomaticRestore} onResetDemoWorkspace={() => setDemoResetModal(true)} ruleHistory={(workspace.ruleHistory ?? []).filter((record) => record.storeId === activeStore.id)} /> : null}
         {activePage === "payroll" ? <PayrollPage activeStore={activeStoreView} activeMonth={activeMonth} setActiveMonth={setActiveMonth} exportCurrentMonth={exportCurrentMonth} totalNetSalary={totalNetSalary} forecastNetSalary={forecastNetSalary} payrollRows={payrollRows} touchedRows={touchedRows} exceptionCount={exceptionCount} completionRate={completionRate} monthlyStore={monthlyStore} selectedRow={selectedRow} setSelectedEmployeeId={setSelectedEmployeeId} patchMonthlyEntry={patchMonthlyEntry} toggleEntryComplete={toggleEntryComplete} setEmployeeModal={setEmployeeModal} openAdjustmentModal={openAdjustmentModal} isLocked={isLocked} onClosePayroll={requestClosePayroll} onUnlockPayroll={() => setUnlockModal({ reason: "" })} /> : null}
       </main>
 
@@ -583,6 +602,8 @@ export function App() {
       {unlockModal ? <Modal title="解锁本月工资" onClose={() => setUnlockModal(null)}><form className="modal-form" onSubmit={confirmUnlockPayroll}><div className="modal-summary"><strong>{activeStore.name} · {activeMonth}</strong><span>解锁后可以重新录入，原月结结果将停止使用。</span></div><label className="field"><span>解锁原因</span><textarea autoFocus value={unlockModal.reason} onChange={(event) => setUnlockModal({ reason: event.target.value })} placeholder="请说明发现的问题或需要修改的内容" /></label><ModalActions onCancel={() => setUnlockModal(null)} label="确认解锁" /></form></Modal> : null}
 
       {restoreModal ? <Modal title="恢复备份数据" onClose={() => setRestoreModal(null)}><div className="modal-form"><div className="modal-summary"><strong>即将覆盖当前工资系统数据</strong><span>备份版本：{restoreModal.version ?? "未知"} · 门店数量：{restoreModal.storeCount} 家</span><span>导出时间：{restoreModal.exportedAt ? new Date(restoreModal.exportedAt).toLocaleString("zh-CN") : "未知"}</span></div><p className="modal-copy">旧版备份会自动升级，恢复后保留全部门店、员工及工资记录。</p><div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setRestoreModal(null)}>取消</button><button className="primary-button" type="button" onClick={confirmWorkspaceRestore}>确认恢复</button></div></div></Modal> : null}
+
+      {demoResetModal ? <Modal title="恢复泛化演示工作区" onClose={() => setDemoResetModal(false)}><div className="modal-form"><div className="modal-summary"><strong>即将重置为默认演示数据</strong><span>会恢复为泛化门店、虚构员工和示例金额。</span><span>当前本地工作区会被覆盖；如桌面版可用，将先创建恢复点。</span></div><p className="modal-copy">这个操作不会自动迁移旧示例门店名，而是直接回到默认演示工作区。</p><div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setDemoResetModal(false)}>取消</button><button className="primary-button" type="button" onClick={confirmDemoWorkspaceReset}>确认恢复演示数据</button></div></div></Modal> : null}
     </div>
   );
 }

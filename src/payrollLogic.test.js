@@ -12,6 +12,12 @@ import {
 } from "./payrollLogic.js";
 
 describe("workspace v3 salary state", () => {
+  it("builds a generic demo workspace by default", () => {
+    const workspace = createInitialWorkspace();
+    expect(workspace.stores.map((store) => store.name)).toEqual(["示例一店", "示例二店", "示例三店", "示例四店"]);
+    expect(workspace.employees.every((employee) => employee.name.startsWith("示例员工"))).toBe(true);
+  });
+
   it("migrates v2 employees as salary configured without losing assignments", () => {
     const v2 = createInitialWorkspace();
     v2.version = 2;

@@ -73,9 +73,19 @@ export function PayrollPage({
   const unconfiguredRows = reviewedRows.filter((row) => !row.employee.salaryConfigured);
   const invalidRows = reviewedRows.filter((row) => row.validationIssues.length > 0 && row.employee.salaryConfigured);
   const blockerRows = reviewedRows.filter((row) => row.closeBlockers.length > 0);
+  const topPriorityBlockers = blockerRows.slice(0, 3);
   const draftRows = reviewedRows.filter((row) => !row.entry.isComplete && row.hasDraftChanges && row.closeBlockers.length === 1 && row.closeBlockers[0] === "已录入但还未确认完成");
   const untouchedRows = reviewedRows.filter((row) => !row.entry.isComplete && !row.hasDraftChanges && row.validationIssues.length === 0 && row.employee.salaryConfigured);
   const readyToClose = !isLocked && reviewedRows.length > 0 && blockerRows.length === 0;
+  const controlState = isLocked
+    ? { tone: "success", title: "本月工资已冻结", description: "当前结果已经完成月结，如需修改请填写原因后解锁。", actionLabel: "申请解锁" }
+    : blockerRows.length > 0
+      ? { tone: "warning", title: "当前还不能月结", description: `还有 ${blockerRows.length} 位员工阻塞本店月结，先处理最高优先级阻塞。`, actionLabel: "继续清理阻塞" }
+      : issueRows.length > 0
+        ? { tone: "warning", title: "当前可以月结，但建议先复核重点变化", description: `${issueRows.length} 位员工存在请假、调整或稽核未达标变化。`, actionLabel: "先复核重点变化" }
+        : readyToClose
+          ? { tone: "success", title: "当前可以直接月结", description: "所有员工都已确认完成，可以冻结本店本月工资。", actionLabel: "确认月结" }
+          : { tone: "idle", title: "继续录入并逐个确认", description: "先完成录入和确认，再回到这里执行月结。", actionLabel: "继续录入" };
 
   const visiblePayrollRows = reviewedRows.filter((row) => {
     const matchesSearch = row.employee.name.includes(searchTerm.trim());
@@ -118,8 +128,8 @@ export function PayrollPage({
       <header className="hero">
         <div className="hero__copy">
           <span className="hero__eyebrow">工资工作台</span>
-          <h1>门店工资计算台</h1>
-          <p>{isLocked ? `${activeStore.name} ${activeMonth} 已完成月结，当前结果已冻结。` : "左侧批量录入，右侧即时核对每位员工的工资构成。"}</p>
+          <h1>{activeStore.name}月结控制台</h1>
+          <p>{isLocked ? `${activeMonth} 已完成月结，当前结果已冻结。` : `先清掉 ${blockerRows.length} 个阻塞，再逐个确认员工，最后执行本店月结。`}</p>
         </div>
         <div className="hero__controls">
           <div className="toolbar desktop-payroll-actions">
@@ -135,15 +145,9 @@ export function PayrollPage({
 
       <section className="stats-grid">
         <StatCard
-          label={isLocked ? "已月结实发" : "已确认实发"}
-          value={formatCurrency(totalNetSalary)}
-          hint={`预计实发 ${formatCurrency(forecastNetSalary)}`}
-          accent="primary"
-        />
-        <StatCard
           label="本店确认进度"
           value={`${touchedRows}/${payrollRows.length}`}
-          hint={`待确认 ${pendingRows.length} 人 · 草稿中 ${draftRows.length} 人`}
+          hint={`完成率 ${completionRate}% · 草稿中 ${draftRows.length} 人`}
         />
         <StatCard
           label="月结阻塞"
@@ -156,6 +160,12 @@ export function PayrollPage({
           value={`${exceptionCount} 人`}
           hint={`未动过 ${untouchedRows.length} 人 · 最近保存 ${formatTimestamp(monthlyStore.savedAt)}`}
           accent={exceptionCount > 0 ? "warning" : "success"}
+        />
+        <StatCard
+          label={isLocked ? "已月结实发" : "已确认实发"}
+          value={formatCurrency(totalNetSalary)}
+          hint={`预计实发 ${formatCurrency(forecastNetSalary)}`}
+          accent="primary"
         />
       </section>
 
@@ -185,15 +195,15 @@ export function PayrollPage({
 
           {activeView === "payroll" ? (
             <>
-            <div className={blockerRows.length > 0 ? "exception-dock exception-dock--warning" : "exception-dock exception-dock--clear"}>
+            <div className={`exception-dock exception-dock--${controlState.tone}`}>
               <div>
-                <span className="section-heading__eyebrow">月结前先清掉这些阻塞</span>
-                <strong>{blockerRows.length > 0 ? `${blockerRows.length} 位员工还不能进入月结` : "所有员工都已经确认完成"}</strong>
-                <p>{blockerRows.length > 0 ? `先把每位员工的“确认完成”点掉，再决定是否月结。` : readyToClose ? "当前可以直接确认本店月结。" : "当前没有阻塞，但仍建议抽查重点变化。"}</p>
+                <span className="section-heading__eyebrow">本店月结状态</span>
+                <strong>{controlState.title}</strong>
+                <p>{controlState.description}</p>
               </div>
               <div className="exception-dock__actions">
-                {blockerRows.length > 0 ? (
-                  blockerRows.slice(0, 4).map((row) => (
+                {topPriorityBlockers.length > 0 ? (
+                  topPriorityBlockers.map((row) => (
                     <button
                       className="exception-chip"
                       key={row.employee.id}
@@ -206,15 +216,16 @@ export function PayrollPage({
                   ))
                 ) : (
                   <button className="exception-chip exception-chip--clear" type="button" onClick={isLocked ? onUnlockPayroll : onClosePayroll}>
-                    <strong>{isLocked ? "本月已月结" : "可以确认本店月结"}</strong>
-                    <span>{isLocked ? "工资结果已冻结" : "全部员工都已确认完成"}</span>
+                    <strong>{controlState.actionLabel}</strong>
+                    <span>{isLocked ? "工资结果已冻结" : readyToClose ? "全部员工都已确认完成" : "当前没有阻塞，但建议继续复核"}</span>
                   </button>
                 )}
               </div>
             </div>
             <div className="confirmation-legend">
-              <div><strong>确认完成才算数</strong><span>每位员工都要点一次“确认该员工完成”，哪怕本月没有变更。</span></div>
-              <div><strong>输入一改即取消确认</strong><span>任何加班、请假、调整或备注被修改后，系统会自动回到待确认状态。</span></div>
+              <div><strong>确认完成才计入月结</strong><span>每位员工都要点一次“确认该员工完成”，哪怕本月没有变更。</span></div>
+              <div><strong>修改后自动取消确认</strong><span>任何加班、请假、调整或备注被修改后，系统会自动回到待确认状态。</span></div>
+              <div><strong>重点变化仍建议复核</strong><span>请假、特殊调整和稽核未达标不会阻止录入，但建议老板抽查。</span></div>
             </div>
             <div className="table-shell table-shell--payroll">
               <div className="table-toolbar table-toolbar--filters">
@@ -383,7 +394,7 @@ export function PayrollPage({
             <div className="mobile-payroll-list">
               {visiblePayrollRows.map((row) => (
                 <article
-                  className={row.issueItems.length > 0 ? "mobile-payroll-card mobile-payroll-card--warning" : "mobile-payroll-card"}
+                  className={row.closeBlockers.length > 0 || row.issueItems.length > 0 ? "mobile-payroll-card mobile-payroll-card--warning" : "mobile-payroll-card"}
                   key={row.employee.id}
                 >
                   <button className="mobile-payroll-card__head" type="button" onClick={() => setSelectedEmployeeId(row.employee.id)}>
@@ -397,9 +408,9 @@ export function PayrollPage({
                     <span>实发工资</span>
                     <strong>{row.employee.salaryConfigured ? formatCurrency(row.breakdown.netSalary) : "待设置"}</strong>
                   </div>
-                  {row.issueItems.length > 0 ? (
+                  {row.closeBlockers.length > 0 || row.issueItems.length > 0 ? (
                     <div className="issue-tags">
-                      {row.issueItems.map((item) => <span key={item}>{item}</span>)}
+                      {(row.closeBlockers.length > 0 ? row.closeBlockers : row.issueItems).map((item) => <span key={item}>{item}</span>)}
                     </div>
                   ) : null}
                   <div className="mobile-entry-grid">
@@ -611,7 +622,7 @@ export function PayrollPage({
                   </span>
                 </div>
                 <div className="review-card__copy">
-                  <strong>老板先看这里</strong>
+                  <strong>当前员工月结状态</strong>
                   <p>{selectedReviewRow.reviewStatus.summary}</p>
                   <div className="issue-tags">
                     {(selectedReviewRow.changeItems.length > 0 ? selectedReviewRow.changeItems : ["本月暂无录入变化"]).map((item) => (
@@ -621,8 +632,12 @@ export function PayrollPage({
                 </div>
               </div>
               <div className="detail-card detail-card--confirmation">
-                <h3>本员工确认动作</h3>
+                <h3>当前员工确认动作</h3>
                 <p>{selectedReviewRow.entry.isComplete ? "当前已经确认完成；如果继续修改数据，系统会自动取消确认。" : selectedReviewRow.closeBlockers[0] ?? "点下确认后，这名员工才会从月结阻塞中移除。"}</p>
+                <div className="detail-card__signal-list">
+                  <span>{selectedReviewRow.closeBlockers[0] ?? "当前没有月结阻塞"}</span>
+                  <span>{selectedReviewRow.hasDraftChanges ? "本月已有录入变更。" : "本月没有录入变更，也需要手动确认一次。"}</span>
+                </div>
                 <button
                   className={selectedReviewRow.entry.isComplete ? "completion-button completion-button--strong is-complete" : "completion-button completion-button--strong"}
                   type="button"
@@ -634,7 +649,7 @@ export function PayrollPage({
                 </button>
                 <div className="detail-card__meta">
                   <span>{selectedReviewRow.entry.isComplete ? `确认时间：${formatTimestamp(selectedReviewRow.entry.completedAt)}` : "确认后，这名员工才会计入本店可月结范围。"}</span>
-                  <span>{selectedReviewRow.hasDraftChanges ? "本月已有录入变更。" : "本月没有录入变更，也需要手动确认一次。"}</span>
+                  <span>{selectedReviewRow.issueItems.length > 0 ? `待复核：${selectedReviewRow.issueItems.join("、")}` : "当前没有额外复核提示。"}</span>
                 </div>
               </div>
               <div className="profile-strip">

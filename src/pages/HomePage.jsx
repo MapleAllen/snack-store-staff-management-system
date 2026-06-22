@@ -1,4 +1,3 @@
-import { PageHeader } from "../components/PageHeader.jsx";
 import { StatCard } from "../components/StatCard.jsx";
 import { SectionHeading } from "../components/SectionHeading.jsx";
 import {
@@ -63,8 +62,14 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) 
       employeeId: row.employee.id,
       employeeName: row.employee.name,
       reason: getPayrollCloseBlockers(row)[0],
-    })))
-    .slice(0, 5);
+    })));
+  const priorityEmployees = priorityRows.slice(0, 3);
+  const blockerReasonSummary = Object.entries(priorityRows.reduce((summary, item) => {
+    summary[item.reason] = (summary[item.reason] ?? 0) + 1;
+    return summary;
+  }, {}))
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 3);
 
   function goToPayroll(storeId) {
     if (storeId) onSelectStore(storeId);
@@ -73,28 +78,66 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) 
 
   return (
     <>
-      <PageHeader
-        eyebrow="本月总览"
-        title="老板本月工资待办"
-        description={`${activeMonth} 先处理未设置、待录入和异常，再确认月结。`}
-        actions={<button className="primary-button" type="button" onClick={() => goToPayroll(recommendedAction.storeId)}>{recommendedAction.label}</button>}
-      />
-      <section className="owner-priority-board">
-        <div className="owner-priority-board__main">
-          <span className="hero__eyebrow">当前最先处理</span>
-          <h2>{recommendedAction.label}</h2>
-          <p>{recommendedAction.hint}</p>
-          <div className="owner-priority-board__actions">
+      <section className="command-center">
+        <div className="command-center__main">
+          <span className="hero__eyebrow">本月指挥台</span>
+          <h1>{recommendedAction.label}</h1>
+          <p>{activeMonth} {recommendedAction.hint}。先清掉阻塞，再决定是否月结和导出。</p>
+          <div className="command-center__actions">
             <button className="primary-button" type="button" onClick={() => goToPayroll(recommendedAction.storeId)}>{recommendedAction.label}</button>
             <button className="secondary-button" type="button" onClick={() => onNavigate("reports")}>查看门店报表</button>
           </div>
+          <div className="command-center__digest">
+            <article className="command-center__metric">
+              <span>当前月结阻塞</span>
+              <strong>{totalBlockers > 0 ? `${totalBlockers} 项` : "没有阻塞"}</strong>
+              <small>{totalBlockers > 0 ? "待确认、待设薪资和输入错误会阻止月结" : "当前可以进入复核或直接月结"}</small>
+            </article>
+            <article className="command-center__metric">
+              <span>老板本轮最先动作</span>
+              <strong>{recommendedAction.label}</strong>
+              <small>{recommendedAction.hint}</small>
+            </article>
+          </div>
         </div>
-        <div className="owner-priority-board__side">
-          <div className="priority-checklist">
-            <strong>今天卡住月结的员工</strong>
-            {priorityRows.length > 0 ? (
+        <div className="command-center__side">
+          <div className="confidence-card">
+            <div className="confidence-card__header">
+              <strong>结薪信心摘要</strong>
+              <span>{activeMonth}</span>
+            </div>
+            <div className="confidence-card__grid">
+              <article className={totalPending > 0 ? "confidence-card__item is-warning" : "confidence-card__item is-success"}>
+                <span>待确认员工</span>
+                <strong>{totalPending} 人</strong>
+                <small>{totalPending > 0 ? "逐个确认后才能进入月结" : "当前没有待确认员工"}</small>
+              </article>
+              <article className={readyStores.length > 0 ? "confidence-card__item is-success" : "confidence-card__item"}>
+                <span>可直接月结</span>
+                <strong>{readyStores.length} 家</strong>
+                <small>{readyStores.length > 0 ? readyStores.map((item) => item.store.name).slice(0, 2).join("、") : "先把员工确认完整"}</small>
+              </article>
+              <article className={totalExceptions > 0 ? "confidence-card__item is-warning" : "confidence-card__item"}>
+                <span>待复核变化</span>
+                <strong>{totalExceptions} 人</strong>
+                <small>{totalExceptions > 0 ? "请假、调整或未达标仍建议抽查" : "当前没有重点变化"}</small>
+              </article>
+            </div>
+          </div>
+          <div className="blocker-digest">
+            <strong>当前阻塞摘要</strong>
+            {blockerReasonSummary.length > 0 ? (
+              <div className="blocker-digest__reasons">
+                {blockerReasonSummary.map(([reason, count]) => (
+                  <span key={reason} className="blocker-digest__reason">{reason} · {count} 人</span>
+                ))}
+              </div>
+            ) : (
+              <p>当前没有月结阻塞，可以直接进入复核或月结。</p>
+            )}
+            {priorityEmployees.length > 0 ? (
               <div className="priority-checklist__items">
-                {priorityRows.map((item) => (
+                {priorityEmployees.map((item) => (
                   <button key={`${item.storeId}-${item.employeeId}`} className="priority-checklist__item" type="button" onClick={() => goToPayroll(item.storeId)}>
                     <span>{item.storeName}</span>
                     <strong>{item.employeeName}</strong>
@@ -102,26 +145,21 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) 
                   </button>
                 ))}
               </div>
-            ) : (
-              <p>当前没有阻塞员工；可以直接去做月结或查看已完成工资。</p>
-            )}
-          </div>
-          <div className="priority-ready">
-            <span>可直接月结</span>
-            <strong>{readyStores.length} 家门店</strong>
-            <small>{readyStores.length > 0 ? readyStores.map((item) => item.store.name).slice(0, 2).join("、") : "先把所有员工逐个确认完成"}</small>
+            ) : null}
           </div>
         </div>
       </section>
+
       <section className="stats-grid">
-        <StatCard label="已确认实发" value={formatCurrency(totalConfirmed)} hint={`预计实发 ${formatCurrency(totalForecast)}`} accent="primary" />
-        <StatCard label="已月结实发" value={formatCurrency(totalClosed)} hint={`${closedStores}/${activeStores.length} 家门店完成`} accent={closedStores === activeStores.length ? "success" : undefined} />
+        <StatCard label="预计实发" value={formatCurrency(totalForecast)} hint={`${totalEmployees} 位在岗员工`} accent="primary" />
+        <StatCard label="已确认实发" value={formatCurrency(totalConfirmed)} hint={`${totalPending} 人待确认`} />
+        <StatCard label="已月结实发" value={formatCurrency(totalClosed)} hint={`${closedStores}/${activeStores.length} 家门店完成`} accent={closedStores === activeStores.length ? "success" : "default"} />
         <StatCard label="月结阻塞" value={`${totalBlockers} 项`} hint={`待确认 ${totalPending} · 待设置 ${totalUnconfigured} · 输入有误 ${totalInvalid}`} accent={totalBlockers ? "warning" : "success"} />
-        <StatCard label="待复核变化" value={`${totalExceptions} 人`} hint={`${totalEmployees} 位在岗员工`} accent={totalExceptions ? "warning" : "success"} />
       </section>
+
       <section className="dashboard-grid">
         <div className="panel page-panel">
-          <SectionHeading eyebrow="门店待办" title={`${activeStores.length} 家门店处理状态`} description="点击门店直接进入工资工作台。" />
+          <SectionHeading eyebrow="门店待办" title={`${activeStores.length} 家门店处理状态`} description="先看阶段，再决定是否进入工资工作台。" />
           <div className="store-cards">
             {storeSummaries.map((item) => {
               const maxTotal = Math.max(...storeSummaries.map((summary) => summary.stage.forecastTotal), 1);
@@ -136,24 +174,29 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) 
                       : item.exceptions
                         ? { label: "已确认待复核", tone: "warning" }
                         : { label: "可直接月结", tone: "success" };
+              const alertRows = item.blockerRows.length > 0 ? item.blockerRows.slice(0, 1) : item.issueRows.slice(0, 2);
               return (
                 <button className="store-card" key={item.store.id} type="button" onClick={() => goToPayroll(item.store.id)}>
-                  <div className="store-card__head"><strong>{item.store.name}</strong><span className={`status-badge status-badge--${status.tone}`}>{status.label}</span></div>
+                  <div className="store-card__stage">
+                    <span className={`status-badge status-badge--${status.tone}`}>{status.label}</span>
+                    <span>{item.blockers > 0 ? `阻塞 ${item.blockers}` : item.exceptions > 0 ? `复核 ${item.exceptions}` : "状态稳定"}</span>
+                  </div>
+                  <strong className="store-card__title">{item.store.name}</strong>
                   <strong className="store-card__value">{formatCurrency(item.stage.isClosed ? item.stage.closedTotal : item.stage.confirmedTotal)}</strong>
                   <span className="store-card__forecast">预计 {formatCurrency(item.stage.forecastTotal)}</span>
                   <div className="progress-track"><span style={{ width: `${Math.max(10, (item.stage.forecastTotal / maxTotal) * 100)}%` }} /></div>
                   <div className="store-card__meta">
                     <span>已确认 {item.stage.confirmedCount}</span>
-                    <span>阻塞 {item.blockers}</span>
-                    <span>复核 {item.exceptions}</span>
+                    <span>待确认 {item.stage.pendingCount}</span>
+                    <span>待复核 {item.exceptions}</span>
                   </div>
-                  {item.blockerRows.length > 0 ? (
+                  {alertRows.length > 0 ? (
                     <div className="store-card__alerts">
-                      {item.blockerRows.slice(0, 2).map((row) => <span key={row.employee.id}>{row.employee.name}：{getPayrollCloseBlockers(row)[0]}</span>)}
-                    </div>
-                  ) : item.issueRows.length > 0 ? (
-                    <div className="store-card__alerts">
-                      {item.issueRows.slice(0, 2).map((row) => <span key={row.employee.id}>{row.employee.name}：{getPayrollIssueItems(row)[0]}</span>)}
+                      {alertRows.map((row) => (
+                        <span key={row.employee.id}>
+                          {row.employee.name}：{item.blockerRows.length > 0 ? getPayrollCloseBlockers(row)[0] : getPayrollIssueItems(row)[0]}
+                        </span>
+                      ))}
                     </div>
                   ) : null}
                 </button>
@@ -162,7 +205,7 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) 
           </div>
         </div>
         <aside className="panel page-panel">
-          <SectionHeading eyebrow="核薪顺序" title="老板确认顺序" description="状态按风险和下一步排序。" />
+          <SectionHeading eyebrow="核薪顺序" title="老板确认顺序" description="用同一套顺序处理所有门店。" />
           <ol className="workflow-list">
             <li><strong>先补薪资设置</strong><span>新员工没有三项薪资时，不能进入确认。</span></li>
             <li><strong>逐个确认员工</strong><span>即使本月没变化，也要点确认完成。</span></li>
