@@ -1,101 +1,128 @@
-# Desktop-Security - Plan
+# Desktop-Security Plan
 
 ## Objective
 
-Provide meaningful application-level access protection for a local single-user payroll desktop application, where PIN lock offers a practical barrier against casual unauthorized access while the architecture remains transparent about what it can and cannot protect.
+Provide honest, practical desktop access protection for a local single-user payroll app. The target end state is a Windows-first security model with clear boundaries, reliable lock behavior, tested IPC isolation, recoverable credentials, and no misleading claim that an app PIN replaces operating-system security or encrypted storage.
 
 ## Design Principles
 
-- **Defense in depth, not a single wall**: PIN lock is one layer; it depends on OS account isolation, disk encryption, and physical security.
-- **Honest about boundaries**: Documentation and UI must never imply that a 4-6 digit PIN replaces OS-level security.
-- **No irreversible lockout**: Users must always have a path to recover their data, even if PIN access is lost (currently via unencrypted backup export before PIN set).
-- **Crypto in main process**: PIN hash derivation and verification happen in the Electron main process via Node.js crypto, not in the renderer.
-- **Minimal IPC surface**: Lock-related IPC only exposes verify/set/clear/status, never the raw hash or salt.
-- **Brute-force resistance matters**: Even a 4-digit PIN must be practically resistant to rapid guessing.
+- PIN lock is defense-in-depth, not data-at-rest encryption.
+- PIN hashing and verification stay in the Electron main process.
+- The renderer never receives PIN hashes, salts, derived keys, or filesystem access.
+- Users must understand lost-PIN consequences before enabling protection.
+- Brute-force resistance must survive realistic user behavior, including restarts in future phases.
+- Security UI must be explicit about what is protected and what remains plaintext.
+- Do not add cloud-based recovery, sync, or remote wipe without a product decision.
 
-## Phases
+## Phase 1: Basic PIN Lock and Electron Hardening — DONE
 
-### Phase 1: Basic PIN Lock — DONE
+Status: **Done**
+
+Goals:
+
+- Add a main-process PIN barrier and harden Electron renderer boundaries.
 
 Completed work:
-- PIN set with 4-6 digit format validation: `main.cjs:133-149`.
-- PBKDF2 hash storage with random salt: `main.cjs:48-52`.
-- Lock/unlock flow with LockScreen UI: `LockScreen.jsx`.
-- PIN change requiring old PIN verification: `main.cjs:137-141`.
-- PIN clear requiring current PIN: `main.cjs:176-187`.
-- Brute-force protection: 5 attempts, 30-second cooldown: `main.cjs:153-168`.
-- IPC handlers: `lock:status`, `lock:set-pin`, `lock:unlock`, `lock:lock`, `lock:clear-pin`.
 
-### Phase 2: Auto-Lock on Idle and Sleep — NOT STARTED
+- Electron uses `contextIsolation: true`, `nodeIntegration: false`, and `sandbox: true`.
+- Navigation, new-window, and permission requests are restricted.
+- PIN format is limited to 4-6 numeric digits.
+- PINs are stored as PBKDF2 hashes with random salt in `lock.json`.
+- Startup lock gate, unlock UI, PIN set/change/clear, and manual lock controls exist.
+- Basic brute-force cooldown exists: five failed attempts then 30 seconds.
 
-Goal: Automatically engage PIN lock when the user steps away or the system sleeps.
+## Phase 2: Session Lock State and Auto-Lock — NOT STARTED
 
-Tasks:
-- Add idle timeout: lock after N minutes of no user interaction.
-- Detect system sleep/resume and engage lock on resume if PIN is set.
-- Detect app focus loss and optionally lock.
-- Add user-configurable auto-lock timeout in Settings.
-- Add "lock on minimize" option.
-- Gracefully handle the case where auto-lock triggers during an active save operation.
+Status: **Not Started**
 
-### Phase 3: PIN Recovery Mechanism — NOT STARTED
+Goals:
 
-Goal: Provide a documented, safe recovery path for forgotten PINs without creating a backdoor.
+- Make lock behavior reliable across manual lock, idle, sleep, and app focus transitions.
 
-Tasks:
-- Add recovery code generation: on PIN set, generate a one-time 8+ character recovery code.
-- Recovery code is shown once during setup and never stored in plaintext.
-- Add recovery flow: enter recovery code → PIN is cleared → user sets a new PIN.
-- Store recovery code hash (not the code itself) for verification.
-- Document that the recovery code must be stored securely offline.
-- Add warning during PIN setup: remind user to export an unencrypted backup.
+Remaining features:
 
-### Phase 4: Persistent Brute-Force Protection — NOT STARTED
+- Add explicit main-process session lock state separate from `pinSet`.
+- Make `lock:status` distinguish `locked` and `pinSet` accurately.
+- Add configurable idle auto-lock timeout.
+- Lock on system sleep/resume when PIN is set.
+- Add optional lock on minimize or focus loss.
+- Add tests for startup lock, manual lock, unlock, and status transitions.
 
-Goal: Prevent brute-force attacks that span application restarts.
+## Phase 3: PIN Recovery — NOT STARTED
 
-Tasks:
-- Persist `failedAttempts` and `cooldownUntil` to a file so they survive app restart.
-- Implement escalating cooldowns: 30s → 5min → 30min → 1hr after successive cooldown cycles.
-- Add lock event logging: record timestamp, IP, and result of every unlock attempt.
-- Surface lock event history in a security settings panel.
+Status: **Not Started**
 
-### Phase 5: OS-Level Authentication Integration — NOT STARTED
+Goals:
 
-Goal: Offer stronger authentication options for platforms that support it.
+- Provide a recovery path without creating a backdoor.
 
-Tasks:
-- Add Windows Hello integration as an alternative to PIN on Windows.
-- Add Touch ID integration as an alternative to PIN on macOS.
-- Fall back to PIN when biometric hardware is unavailable.
-- Support requiring both PIN and biometric for high-security mode.
+Remaining features:
 
-### Phase 6: Security Testing and Audit — NOT STARTED
+- Generate a one-time recovery code when setting PIN.
+- Show recovery code once and store only its hash.
+- Add recovery flow that clears PIN after correct recovery code.
+- Add setup warning to export a backup before enabling PIN.
+- Document lost-PIN behavior in Settings, `SECURITY.md`, and `docs/data-safety.md`.
 
-Goal: Validate the security implementation against common attack vectors.
+## Phase 4: Persistent Brute-Force Protection and Audit — NOT STARTED
 
-Tasks:
-- Test PIN hash storage: verify salt is unique per PIN set, hash is not reversible.
-- Test IPC isolation: verify renderer cannot access Node crypto or filesystem.
-- Test brute-force timing: verify cooldown is enforced even across IPC channel calls.
-- Test PIN change flow: verify old PIN required, new hash replaces old.
-- Test PIN clear flow: verify lock.json is removed or overwritten.
-- Test that lock.json changes on disk do not crash the app (tamper detection).
-- Add automated security regression tests for PIN IPC handlers.
+Status: **Not Started**
+
+Goals:
+
+- Make repeated guessing harder and auditable across app restarts.
+
+Remaining features:
+
+- Persist failed-attempt count and cooldown expiry.
+- Add escalating cooldowns after repeated lockout cycles.
+- Add lock event log for set PIN, change PIN, clear PIN, lock, unlock, failed unlock, and cooldown.
+- Add settings panel summary for recent lock events without exposing secrets.
+- Add tests for restart-persistent cooldown behavior.
+
+## Phase 5: OS-Level Authentication — NOT STARTED
+
+Status: **Not Started**
+
+Goals:
+
+- Offer stronger local authentication where the platform supports it.
+
+Remaining features:
+
+- Research Windows Hello integration options for Electron.
+- Define fallback behavior when biometric authentication is unavailable.
+- Decide whether biometric auth replaces PIN or acts as an additional unlock method.
+- Add Windows real-device validation before documenting support.
+
+## Phase 6: Security Testing — NOT STARTED
+
+Status: **Not Started**
+
+Goals:
+
+- Add automated and manual checks for lock and Electron security behavior.
+
+Remaining features:
+
+- Add IPC handler tests for PIN set, change, clear, unlock, wrong PIN, and cooldown.
+- Add tests that salt changes after PIN reset.
+- Add tests for corrupt `lock.json` behavior.
+- Add manual Windows checks for startup lock, restart unlock, wrong PIN cooldown, and PIN clear.
+- Add regression checks that renderer cannot access Node filesystem APIs.
 
 ## Implementation Rules
 
-- Do not log or surface the PIN, PIN hash, or salt in any UI, error message, or console output.
-- Do not store the PIN in plaintext anywhere — not in memory, not on disk, not in logs.
-- Do not allow bypassing the PIN lock without either the correct PIN, the recovery code, or a full data reset.
-- Do not remove or weaken the brute-force cooldown without a compensating control.
-- Do not add cloud-based PIN storage, sync, or recovery.
-- Do not claim that PIN replaces OS-level account isolation or disk encryption.
+- Do not log PINs, hashes, salts, recovery codes, or derived keys.
+- Do not claim the PIN encrypts workspace data.
+- Do not allow PIN bypass without correct PIN, valid recovery code, or explicit data reset/recovery workflow.
+- Do not add cloud recovery or remote credential storage.
+- Do not weaken Electron isolation settings to implement security features.
+- Do not enable Windows Hello claims without real-device validation.
 
 ## Open Questions
 
-- Should auto-lock be enabled by default, or opt-in?
-- Should recovery code generation be mandatory on PIN set, or optional?
-- Should lock events (successful unlocks, failed attempts) be viewable in-app, or only via file inspection?
-- Should escalating cooldowns reset after a configurable period of no failed attempts?
-- Should integrated biometric auth require PIN as a fallback, or replace it entirely?
+- Should auto-lock be enabled by default for commercial users?
+- Should recovery code generation be mandatory when setting a PIN?
+- Should clearing PIN immediately unlock the current session or return to the workspace without showing `LockScreen`?
+- Should lock event logs live inside the workspace, next to `lock.json`, or in a separate security log file?

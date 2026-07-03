@@ -1,4 +1,4 @@
-# Storage-Adapter - Description
+# Storage-Adapter Module Description
 
 ## Module Name
 
@@ -6,94 +6,114 @@ Storage-Adapter
 
 ## Purpose
 
-Provides a runtime-aware storage abstraction layer that routes workspace persistence to either browser `localStorage` (Web dev preview) or Electron IPC-based file storage (desktop), with migration, corruption recovery, and save-status tracking.
+Storage-Adapter provides the runtime persistence boundary for the local payroll workspace. It lets the same React app run in a Web development preview backed by `localStorage` and in Electron desktop mode backed by a main-process workspace file, while preserving migration and corruption recovery behavior.
 
 ## Current Implementation
 
+The renderer adapter is implemented in `src/storageAdapter.js`. Desktop file I/O is implemented in `electron/workspace-store.cjs` and exposed through `window.payrollDesktop` from `electron/preload.cjs`. The adapter decides which backend to use at runtime and returns a common result shape to `src/App.jsx`.
+
 ### Capabilities
 
-**Dual-backend storage routing**
-- `loadWorkspace()`: Detects `window.payrollDesktop` presence to choose desktop IPC or browser localStorage backend.
-- `saveWorkspace(workspace)`: Routes to desktop IPC or browser localStorage accordingly.
-- `getStorageStatus()`: Returns `{ mode, saveState, lastSavedAt, recoveryState }` from either backend.
-- `isDesktopStorage()`: Convenience boolean check for desktop environment.
+**Runtime backend selection**
 
-**Desktop load path**
-- Calls `window.payrollDesktop.loadWorkspace()` IPC → main process `workspaceStore.load()`.
-- On successful load with workspace data: applies `migrateWorkspace()` and returns.
-- On `recoveryState === "missing"` (no canonical workspace file): bridges to browser `localStorage` if legacy data exists, saves it to the desktop file, and returns with `recoveryState: "migrated"`.
-- On any other failure state (corrupt): returns `{ workspace: null, recoveryState: "corrupt-fallback" }` without attempting to overwrite the corrupt file.
+- `loadWorkspace()` uses `window.payrollDesktop` when available and falls back to browser `localStorage` otherwise.
+- `saveWorkspace(workspace)` writes through the same selected backend.
+- `getStorageStatus()` returns backend status from Electron or a static browser fallback.
+- `isDesktopStorage()` returns whether the desktop bridge exists.
 
-**Desktop save path**
-- Calls `window.payrollDesktop.saveWorkspace(workspace)` IPC → main process `workspaceStore.save()`.
-- Catches errors and normalizes error codes (`workspace:save-failed`, `workspace:write-denied`, `workspace:disk-full`).
+**Desktop workspace load**
 
-**Browser load path**
-- Reads `localStorage.getItem(STORAGE_KEY)`, parses JSON, validates basic structure (`stores` array + `monthlyRecords` object).
-- Returns `recoveryState: "corrupt-fallback"` if structure is invalid or parse fails.
-- Applies `migrateWorkspace()` on valid data.
+- Calls `window.payrollDesktop.loadWorkspace()` which invokes the `workspace:load` IPC handler.
+- `electron/workspace-store.cjs` reads `workspace.json` from Electron `userData`.
+- The workspace file is a backup-format envelope and is validated with `validateBackupPayload()` before returning embedded data.
+- The renderer applies `migrateWorkspace()` after desktop load.
+- Missing desktop workspace enters `recoveryState: "missing"` and may bridge old browser `localStorage` data into the desktop file.
+- Corrupt desktop workspace returns `recoveryState: "corrupt-fallback"` and does not overwrite the corrupt file with demo data.
 
-**Browser save path**
-- Writes `localStorage.setItem(STORAGE_KEY, JSON.stringify(workspace))`.
-- Catches `QuotaExceededError` or other write failures and returns error status.
+**Desktop workspace save**
 
-**Electron workspace store (main process)**
-- `workspace-store.cjs`: Manages the canonical `workspace.json` in Electron `userData` directory.
-- `load()`: Reads file, parses JSON, validates via `validateBackupPayload()` from shared backup-format.
-- Returns `{ workspace, source: "desktop-file", recoveryState }` with recoveryState being "normal", "missing" (ENOENT), or "corrupt-fallback" (any other error).
-- `save(workspace)`: Wraps workspace in a backup-format envelope, writes atomically via temp file + rename.
-- Error mapping: `ENOSPC` → `workspace:disk-full`, `EACCES` → `workspace:write-denied`, other → `workspace:save-failed`.
-- Serializes writes through a promise queue to prevent concurrent file operations.
+- `workspace-store.cjs` wraps the workspace in a backup-format envelope and writes `workspace.json` using temp file plus rename.
+- Save operations are serialized through an internal promise queue.
+- Save failures map `ENOSPC` to `workspace:disk-full`, `EACCES` to `workspace:write-denied`, and other failures to `workspace:save-failed`.
 
-### Architecture
+**Browser development preview**
 
-| File | Runtime | Role |
-|---|---|---|
-| `src/storageAdapter.js` | Renderer | Environment detection, routing, bridge logic |
-| `electron/workspace-store.cjs` | Main process | Canonical workspace file I/O, atomic save |
-| `shared/backup-format.js` | Shared | Backup envelope format used by workspace-store for validation |
+- Browser mode reads and writes `localStorage` using `STORAGE_KEY` from `shared/backup-format.js`.
+- Browser load validates a minimal structure before calling `migrateWorkspace()`.
+- Browser save reports an error if `localStorage.setItem()` fails.
+- Browser mode is development-only and does not provide automatic recovery points, PIN lock, or desktop file storage.
 
-**Recovery state machine**
+**Recovery behavior**
 
-```
-loadWorkspace()
-  ├─ Desktop path
-  │   ├─ workspace present → { workspace, recoveryState: "normal" }
-  │   ├─ recoveryState: "missing" → bridge localStorage → { recoveryState: "migrated" }
-  │   │   └─ no localStorage → { workspace: null, recoveryState: "missing" }
-  │   └─ recoveryState: "corrupt-fallback" → { workspace: null }
-  └─ Browser path
-      ├─ data present + valid → { recoveryState: "normal" }
-      ├─ data present + corrupt → { recoveryState: "corrupt-fallback" }
-      └─ no data → { workspace: null, recoveryState: "missing" }
-```
+- Corrupt data paths return `recoveryState: "corrupt-fallback"`.
+- `App.jsx` renders `RecoveryScreen` for corrupt startup state and offers restore from backup, reset to demo, or other recovery actions.
+- Missing data uses `createInitialWorkspace()` through the application fallback path after load completes.
 
-**Critical behavioral contract**
+## Architecture
 
-The corrupt-data path NEVER silently returns `createInitialWorkspace()`. It returns `recoveryState: "corrupt-fallback"` and surfaces the corruption before any automatic save-then-overwrite sequence. The caller (App.jsx) renders a RecoveryScreen with three options: restore from backup, export corrupt data, or reset to demo.
+Storage-Adapter is a renderer facade over browser storage and Electron IPC. Desktop persistence happens only in the main process.
 
-### Integration Points
+### Renderer Adapter (`src/storageAdapter.js`)
 
-- **App.jsx**: Calls `loadWorkspace()` at startup and `saveWorkspace()` after mutations. Renders `RecoveryScreen` when recoveryState is "corrupt-fallback".
-- **electron/main.cjs**: Registers IPC handlers for `workspace:load`, `workspace:save`, `workspace:status` that delegate to workspaceStore.
-- **electron/preload.cjs**: Exposes `loadWorkspace()`, `saveWorkspace()`, `getWorkspaceStatus()` on `window.payrollDesktop`.
-- **shared/backup-format.js**: Workspace store depends on `validateBackupPayload()` for read validation; storageAdapter re-exports `BACKUP_TYPE`, `BACKUP_REASONS`, `STORAGE_KEY`, `validateBackupPayload`.
+- `browserLoadWorkspace()`
+  - Reads and minimally validates browser `localStorage`.
+- `browserSaveWorkspace(workspace)`
+  - Writes workspace JSON to browser `localStorage`.
+- `browserGetStatus()`
+  - Returns static browser-mode storage status.
+- `loadWorkspace()`
+  - Selects desktop or browser backend and applies migration.
+- `saveWorkspace(workspace)`
+  - Selects desktop or browser save path and normalizes errors.
+- `getStorageStatus()` and `isDesktopStorage()`
+  - Provide environment/status helpers.
 
-### Current Limitations
+### Desktop Store (`electron/workspace-store.cjs`)
 
-- Browser bridge migration reads localStorage but does not delete it; legacy data remains in both places after migration.
-- `getStorageStatus()` in browser mode returns a static object (`saveState: "idle"`, `lastSavedAt: null`) and does not track async save-state changes.
-- Desktop workspace file is unencrypted in v2.x.
-- Workspace store's `save` queue silently swallows errors in the chain (`operation.catch(() => undefined)`), which could mask intermittent failures between explicit saves.
-- No file locking or multi-instance detection; two simultaneous Electron instances could overwrite workspace.
-- The `version: "2.0.0"` header in workspace-store's save envelope is hardcoded and not derived from `WORKSPACE_VERSION`.
+- `createWorkspaceStore({ baseDir, now })`
+  - Creates the workspace file store rooted at Electron `userData`.
+- `load()`
+  - Reads `workspace.json`, parses JSON, validates the backup envelope, and returns workspace data.
+- `save(workspace)`
+  - Writes the envelope atomically through `workspace.json.tmp` then `rename()`.
+- `getStatus()`
+  - Returns a static desktop status object.
 
-### Future Directions
+### IPC Bridge
 
-- Add encrypted workspace file storage.
-- Add write-ahead log or journal for crash recovery during save.
-- Track actual async save state in browser mode for UI consistency.
-- Support workspace file locking to prevent multi-instance corruption.
-- Add integrity checksum in the save envelope header.
-- Add save-retry logic with exponential backoff for transient disk errors.
-- Support configurable storage backends (IndexedDB, SQLite via better-sqlite3).
+- `electron/main.cjs`
+  - Registers `workspace:load`, `workspace:save`, and `workspace:status` handlers.
+- `electron/preload.cjs`
+  - Exposes `loadWorkspace`, `saveWorkspace`, and `getWorkspaceStatus` on `window.payrollDesktop`.
+
+## Integration Points
+
+- `src/App.jsx`
+  - Loads workspace at startup, saves after workspace state changes, handles corrupt recovery state, and displays save status.
+- `src/payrollData.js`
+  - Provides `createInitialWorkspace()` and `migrateWorkspace()`.
+- `shared/backup-format.js`
+  - Provides `STORAGE_KEY`, `BACKUP_TYPE`, `BACKUP_REASONS`, and `validateBackupPayload()`.
+- `src/workspaceStore.test.js`
+  - Tests desktop store missing, save/load, and corrupt file states.
+
+## Current Limitations
+
+- The canonical desktop workspace file is plaintext JSON in v2.x.
+- The workspace envelope is structurally validated but does not include a checksum or tamper-evident hash.
+- Browser `getStorageStatus()` and desktop `getStatus()` return static status rather than live save queue state.
+- The desktop save envelope hardcodes `version: "2.0.0"` instead of deriving it from the app version or workspace version.
+- Bridge migration reads old browser `localStorage` but intentionally does not delete it.
+- There is no multi-instance lock; two desktop app instances could race to write the same workspace file.
+- There is no write-ahead journal or fsync-based durability step beyond temp-file plus rename.
+- Save queue continuation swallows previous errors to keep later saves possible; callers only see errors for their explicit save call.
+
+## Future Directions
+
+- Add workspace file checksum validation.
+- Add write-ahead journaling and crash recovery.
+- Add single-instance or file-lock protection.
+- Add optional encrypted workspace file storage with a documented recovery model.
+- Add live save-state reporting for browser and desktop modes.
+- Add app-version metadata to workspace save envelopes.
+- Add an IndexedDB fallback for Web development workspaces that exceed localStorage limits.

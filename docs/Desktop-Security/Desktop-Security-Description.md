@@ -1,4 +1,4 @@
-# Desktop-Security - Description
+# Desktop-Security Module Description
 
 ## Module Name
 
@@ -6,104 +6,109 @@ Desktop-Security
 
 ## Purpose
 
-Implements application-level access protection for the desktop version of the payroll application, including PIN-based lock/unlock, brute-force protection, and IPC-based credential management that keeps cryptographic operations in the Electron main process.
+Desktop-Security provides application-level access protection for the Electron desktop version of 门店工资助手. It gives a single local user a PIN barrier against casual access while preserving the product boundary that OS account isolation, disk encryption, and controlled backups remain required for real payroll data protection.
 
 ## Current Implementation
 
+Desktop security is implemented in `electron/main.cjs`, `electron/preload.cjs`, `src/components/LockScreen.jsx`, `src/pages/SettingsPage.jsx`, and `src/App.jsx`. PIN hashing and verification run in the Electron main process. The renderer only receives IPC methods exposed through the preload bridge.
+
 ### Capabilities
 
-**PIN management**
-- PIN must be 4-6 numeric digits (`/^\d{4,6}$/`).
-- PIN set via `lock:set-pin` IPC handler, which validates format and optionally verifies old PIN before setting a new one.
-- PIN stored as PBKDF2 hash (`pbkdf2Sync`, 100,000 iterations, SHA-512, 64-byte output) with a 16-byte random salt.
-- Hash and salt persisted to `lock.json` in the Electron userData directory.
-- PIN cleared via `lock:clear-pin` IPC handler, requiring current PIN verification.
+**Electron process hardening**
 
-**Lock/unlock flow**
-- `lock:status` returns `{ locked: boolean, pinSet: boolean }` — locked means PIN is set and application is in locked state.
-- `lock:unlock` verifies the provided PIN against the stored hash.
-- `lock:lock` sets the lock state without requiring PIN; just resets attempt counters.
-- On app startup, `loadLockState()` reads `lock.json` to determine if a PIN is set.
+- `BrowserWindow` is created with `contextIsolation: true`, `nodeIntegration: false`, and `sandbox: true`.
+- Renderer navigation is restricted to the development server origin in dev mode or `file:` in packaged mode.
+- New windows are denied through `setWindowOpenHandler(() => ({ action: "deny" }))`.
+- Default session permission checks and permission requests are denied.
+- The renderer accesses desktop features only through `window.payrollDesktop` from `electron/preload.cjs`.
+
+**PIN storage and verification**
+
+- PIN must match `/^\d{4,6}$/`.
+- `hashPin(pin, salt)` uses Node `crypto.pbkdf2Sync()` with 100,000 iterations, SHA-512, 64-byte output, and a 16-byte random salt when setting a new PIN.
+- `lock.json` in Electron `userData` stores only `pinHash` and `salt`.
+- `loadLockState(baseDir)` reads `lock.json` on app startup; missing or invalid state clears in-memory PIN state.
+- `saveLockState(baseDir)` writes or removes `lock.json` after PIN changes.
+
+**Lock IPC API**
+
+- `lock:status` returns `{ locked: lockPinHash !== null, pinSet: lockPinHash !== null }`.
+- `lock:set-pin` validates the new PIN and requires old PIN verification when changing an existing PIN.
+- `lock:unlock` verifies PIN and enforces in-memory attempt limits.
+- `lock:lock` resets failed-attempt state and returns success; the renderer sets the current session lock screen state.
+- `lock:clear-pin` requires current PIN verification and removes persisted PIN state.
 
 **Brute-force protection**
-- Maximum 5 failed attempts (`MAX_PIN_ATTEMPTS`).
-- On 5th failure, triggers a 30-second cooldown (`PIN_COOLDOWN_MS = 30_000`).
-- During cooldown, any unlock attempt throws `lock:pin-attempt-limited` immediately.
-- Failed attempt counter resets on successful unlock or lock action.
 
-**Renderer UI**
-- `LockScreen.jsx` component renders PIN input with visual dot indicators for digits entered.
-- Accepts numeric input only; strips non-digit characters.
-- Displays error messages for wrong PIN or cooldown.
-- Disables submit button when fewer than 4 digits entered or during busy state.
-- Calls `window.payrollDesktop.unlock(pin)` on submit.
+- `MAX_PIN_ATTEMPTS = 5`.
+- `PIN_COOLDOWN_MS = 30_000`.
+- After five failed unlock attempts, `lock:unlock` throws `lock:pin-attempt-limited` and starts a 30-second cooldown.
+- Successful unlock resets failed attempts and cooldown state.
+- Failed-attempt and cooldown state are in memory and reset when the app process restarts.
 
-**Electron security posture**
-- `contextIsolation: true` prevents renderer access to Node.js APIs.
-- `nodeIntegration: false` keeps Node.js out of the renderer process.
-- `sandbox: true` enables Chromium sandboxing.
-- `will-navigate` event handler restricts navigation to the app's origin or file protocol.
-- `setWindowOpenHandler(() => ({ action: "deny" }))` blocks popup windows.
-- `setPermissionCheckHandler(() => false)` and `setPermissionRequestHandler((_, __, cb) => cb(false))` deny all permissions.
+**Renderer lock UX**
 
-### Architecture
+- `App.jsx` checks `desktopApi.getLockStatus()` after workspace load; if a PIN exists, it renders `LockScreen` before the workspace.
+- `LockScreen.jsx` accepts numeric input, strips non-digits, renders digit indicators, and calls `window.payrollDesktop.unlock(pin)`.
+- `SettingsPage.jsx` provides set PIN, change PIN, clear PIN, and manual lock controls when `window.payrollDesktop` exists.
+- PIN management UI maps known IPC error codes to Chinese messages.
 
-| File | Runtime | Role |
-|---|---|---|
-| `electron/main.cjs` | Main process | Lock state management, PIN hash/salt storage, IPC handlers for lock:set-pin, lock:unlock, lock:lock, lock:clear-pin, lock:status, brute-force tracking |
-| `electron/preload.cjs` | Preload | Exposes getLockStatus, setPin, unlock, lock, clearPin via contextBridge |
-| `src/components/LockScreen.jsx` | Renderer | PIN input UI component |
-| `src/App.jsx` | Renderer | Lock state checking, LockScreen rendering gate |
+## Architecture
 
-**IPC channel map**
+Desktop-Security is split between main-process credential handling and renderer UI gating. The main process stores and verifies PIN secrets; the renderer controls whether the current UI session is showing the lock screen.
 
-| Channel | Direction | Purpose |
-|---|---|---|
-| `lock:status` | renderer → main | Returns `{ locked, pinSet }` |
-| `lock:set-pin` | renderer → main | Set or change PIN |
-| `lock:unlock` | renderer → main | Verify PIN to unlock |
-| `lock:lock` | renderer → main | Engage lock state |
-| `lock:clear-pin` | renderer → main | Remove PIN protection |
+### Main Process (`electron/main.cjs`)
 
-**Lock state lifecycle**
+- `loadLockState(baseDir)` and `saveLockState(baseDir)`
+  - Persist or clear `lock.json`.
+- `hashPin(pin, salt)` and `verifyPin(pin)`
+  - Derive and compare PIN hashes.
+- IPC handlers
+  - `lock:status`, `lock:set-pin`, `lock:unlock`, `lock:lock`, and `lock:clear-pin`.
+- Electron security setup
+  - BrowserWindow webPreferences, navigation guard, window-open denial, and permission denial.
 
-```
-App start → loadLockState(userDataPath)
-  ├─ lock.json exists + valid → pinSet: true, locked: true
-  └─ lock.json missing/corrupt → pinSet: false, locked: false
+### Preload Bridge (`electron/preload.cjs`)
 
-Locked state: renderer shows LockScreen
-  → user enters PIN → lock:unlock IPC
-    ├─ success → LockScreen calls onUnlock() → App.jsx renders workspace
-    └─ failure → increment failedAttempts; cooldown after 5
+- `getLockStatus()`
+- `setPin(pin, oldPin)`
+- `unlock(pin)`
+- `lock()`
+- `clearPin(pin)`
 
-Settings: user can set/change/clear PIN
-  → lock:set-pin / lock:clear-pin IPC
-    → hashPin / verifyPin → saveLockState(userDataPath)
-```
+### Renderer UI (`src/components/LockScreen.jsx`, `src/pages/SettingsPage.jsx`, `src/App.jsx`)
 
-### Integration Points
+- `LockScreen.jsx`
+  - PIN input and unlock submission.
+- `SettingsPage.jsx`
+  - PIN setup, change, clear, and manual lock controls.
+- `App.jsx`
+  - Startup lock-state check and `appLocked` UI gate.
 
-- **App.jsx**: Checks lock status on startup, renders LockScreen when locked, provides PIN management in SettingsPage.
-- **electron/preload.cjs**: Bridges renderer lock API calls to main process IPC handlers.
-- **storageAdapter.js**: Unrelated; lock state is separate from workspace data.
+## Integration Points
 
-### Current Limitations
+- `src/storageAdapter.js`
+  - Separate from lock state; workspace storage is not encrypted by the PIN.
+- `docs/data-safety.md` and `SECURITY.md`
+  - Document that PIN lock does not replace OS account isolation or disk encryption.
 
-- No "forgot PIN" recovery mechanism; user must have exported an unencrypted backup before setting PIN.
-- PIN is application-level only; does not integrate with OS-level authentication (Windows Hello, Touch ID).
-- Lock state is not automatically engaged on system sleep/resume or app focus loss.
-- Brute-force cooldown uses an in-memory counter that resets on app restart; persistent lockout is not implemented.
-- PIN hash uses PBKDF2 with 100,000 iterations; security depends on PIN entropy (4-6 digits = 10^4 to 10^6 combinations).
-- `lock.json` is plaintext JSON; the hash and salt are readable by anyone with filesystem access.
-- No mechanism for temporary PIN, emergency access code, or recovery key.
+## Current Limitations
 
-### Future Directions
+- PIN is an app access barrier only; it does not encrypt `workspace.json` or automatic recovery points.
+- `lock:status` uses PIN existence as the startup locked signal; there is no persistent per-session lock state in the main process.
+- Manual lock relies on renderer state after `lock:lock` returns success.
+- Failed-attempt counters and cooldowns are in memory and reset on app restart.
+- There is no forgot-PIN recovery mechanism, recovery code, or OS-level credential integration.
+- Auto-lock on idle, app minimize, screen lock, system sleep, or resume is not implemented.
+- PIN entropy is limited to 4-6 digits, so protection depends heavily on OS-level access controls.
+- `lock.json` is readable by anyone with filesystem access, although it stores a salted hash rather than the PIN.
 
-- Add automatic lock on system sleep, screen lock, or app focus loss.
-- Support OS-level biometric authentication (Windows Hello).
-- Add persistent lockout after repeated cooldown cycles.
-- Increase PBKDF2 iteration count as hardware improves.
-- Add temporary PIN or one-time recovery code generation.
-- Add lock event audit log: record every lock, unlock, failed attempt, PIN change with timestamps.
-- Support hardware-bound key storage (TPM on Windows, Secure Enclave on macOS) for PIN hash.
+## Future Directions
+
+- Add persistent lock session state in the main process.
+- Add auto-lock on idle, system sleep/resume, minimize, or focus loss.
+- Add persistent failed-attempt counters and escalating cooldowns.
+- Add recovery code support for forgotten PINs.
+- Add lock event audit logs.
+- Add optional Windows Hello support after Windows release signing and regression processes exist.
+- Add optional workspace encryption as a separate storage feature, not as a side effect of PIN lock.

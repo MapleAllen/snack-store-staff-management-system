@@ -1,93 +1,145 @@
-# Payroll-Logic - Plan
+# Payroll-Logic Plan
 
 ## Objective
 
-Deliver a precise, auditable, and extensible payroll engine where every calculation step is transparent, validation is comprehensive, and export formats meet real-world compliance needs without introducing runtime dependencies beyond the current React/Vite bundle.
+Build a transparent and extensible payroll engine where every displayed amount can be traced to source inputs, every blocker is machine- and human-readable, exports carry enough metadata for audit, and future payroll rules can evolve without breaking frozen historical results.
 
 ## Design Principles
 
-- **Calculation traceability**: Every derived value must be traceable to a base input (employee field, entry field, config value).
-- **Validation before calculation**: Input errors must be surfaced before partial results are displayed; no hiding errors behind zero or NaN defaults.
-- **Snapshot immutability**: Closed-month payroll rows are served from frozen snapshots only; live recalculation is never applied to closed months.
-- **Resigned employees are excluded by default**: Queries must filter resigned employees unless `includeResigned` is explicitly set.
-- **Stage distinction is sacred**: Forecast, confirmed, and closed totals must never be conflated in UI or export.
-- **Export status is explicit**: Open-month exports must carry a draft marker; closed-month exports must carry a frozen marker.
+- Closed snapshots are immutable: never recalculate a closed month from live employee or store config.
+- Stage separation is mandatory: estimated, confirmed, and closed totals must remain visually and structurally distinct.
+- Validation precedes close: rows with unconfigured salary, invalid entry values, or missing confirmation cannot close.
+- Social insurance remains fixed unless a product decision changes the rule.
+- Open exports are drafts: every open-month export must carry an explicit draft status.
+- Formula changes are versioned: future calculation changes must not reinterpret historical payroll silently.
+- Owner-first review stays primary: blockers, exceptions, and payout confidence come before formula details.
 
-## Phases
+## Phase 1: Current Payroll Engine — DONE
 
-### Phase 1: Core Payroll Engine — DONE
+Status: **Done**
 
-Completed work:
-- `calculatePayroll()` computes full breakdown from employee + entry + store config: `payrollLogic.js:134-162`.
-- Validators cover store config constraints, employee salary setup, and per-entry numeric/range checks: `payrollLogic.js:16-67`.
-- Employee-store queries respect assignment temporal ranges and resigned status: `payrollLogic.js:94-128`.
-- `getStorePayrollRows()` handles closed snapshots vs live rows: `payrollLogic.js:269-295`.
-- Three-stage summary: forecast, confirmed, closed: `payrollLogic.js:297-321`.
+Goals:
 
-### Phase 2: UI-Facing Status and Review — DONE
+- Provide deterministic calculation, validation, row construction, and stage summaries for the current local payroll workflow.
 
 Completed work:
-- `getPayrollReviewStatus()` drives per-row UI badges with tone/label/summary tuple: `payrollLogic.js:255-267`.
-- `getPayrollCloseBlockers()` surfaces explicit blocking reasons for month-close: `payrollLogic.js:232-241`.
-- `getPayrollIssueItems()` and `getPayrollChangeItems()` highlight notable entries for owner review: `payrollLogic.js:222-229`, `payrollLogic.js:243-253`.
-- CSV export and filename sanitization: `payrollLogic.js:164-203`.
 
-### Phase 3: Calculation Transparency — NOT STARTED
+- `calculatePayroll()` computes the current salary breakdown.
+- Store, employee salary, and payroll entry validators exist.
+- Assignment queries exclude resigned employees by default.
+- `getStorePayrollRows()` respects frozen snapshots for closed months.
+- `getPayrollStageSummary()` separates forecast, confirmed, and closed totals.
+- CSV export helpers include filename sanitization and spreadsheet formula injection protection.
 
-Goal: Expose an itemized breakdown so users can audit how each salary component was derived.
+## Phase 2: Owner Review and Close Readiness — DONE
 
-Tasks:
-- Add `calculatePayrollDetailed()` returning `{ breakdown, steps[] }` where each step records input formula, values, and intermediate result.
-- Show derivation in a drill-down panel: baseSalary → deductions → additions → net.
-- Surfaces rounding decisions explicitly in each step.
-- Add a boolean flag to `calculatePayroll()` for `{ detailed: true }`.
-- Maintain backward compatibility: default mode returns the current flat breakdown object.
+Status: **Done**
 
-### Phase 4: Enhanced Export — NOT STARTED
+Goals:
 
-Goal: Move beyond CSV to structured, versioned export formats and improve Chinese-character safety.
-
-Tasks:
-- Add JSON export option with the same field structuring as buildExportRows.
-- Add export metadata header: workspace version, export timestamp, store name, month, status (draft/frozen), and SHA of payroll snapshot.
-- Add BOM handling for CSV to improve CJK character rendering in Excel on Windows.
-- Support selective export: only confirmed rows, only flagged rows, only employees with adjustments.
-- Add export format versioning for forward compatibility.
-
-### Phase 5: Configurable Payroll Rules — NOT STARTED
-
-Goal: Allow store-specific overrides for deduction formulas, bonus tiers, and overtime calculations.
-
-Tasks:
-- Add tiered overtime rates (e.g., first 40h at rate1, beyond at rate2).
-- Add progressive leave deduction caps (max deduction per leave type).
-- Support per-store custom formula overrides via store config extension.
-- Validate config extension structural integrity before use in calculation.
-- Add rule-change impact preview: show how a config change affects current-month rows before committing.
-
-### Phase 6: Testing Strategy — PARTIALLY COMPLETED
+- Surface next actions, blockers, and exceptions before formulas.
 
 Completed work:
-- Existing tests cover salary state, exports, validation, stage totals: `payrollLogic.test.js` — 7 tests.
 
-Remaining tasks:
-- Add tests for edge cases: zero config divisors, negative special adjustments, 0-hour months.
-- Add tests for `getPayrollReviewStatus()` across all tone categories.
-- Add tests for `csvEscape()` with formula injection prefixes, embedded quotes, and CJK characters.
-- Add tests for `buildExportRows()` with draft and closed status markers.
-- Add tests for `getEmployeesForStore()` with future-dated and past-dated assignments.
+- `getPayrollCloseBlockers()` identifies month-close blockers.
+- `getPayrollIssueItems()` identifies non-blocking review items.
+- `getPayrollChangeItems()` summarizes notable row changes.
+- `getPayrollReviewStatus()` powers UI badges in the payroll workbench and mobile cards.
+
+## Phase 3: Calculation Traceability — NOT STARTED
+
+Status: **Not Started**
+
+Goals:
+
+- Let operators and support reviewers see exactly how each salary amount was derived.
+
+Remaining features:
+
+- Add `calculatePayrollDetailed()` returning `{ breakdown, steps }` with source fields, formula text, intermediate values, and rounding results.
+- Show calculation steps in the employee detail panel without changing the summary-first payroll workflow.
+- Add formula identifiers and formula version metadata to closed snapshots.
+- Add tests proving the detailed trace totals match the existing flat breakdown.
+
+## Phase 4: Machine-Readable Validation — NOT STARTED
+
+Status: **Not Started**
+
+Goals:
+
+- Make payroll blockers usable by UI filters, exports, tests, and future support tooling.
+
+Remaining features:
+
+- Replace string-only validation output with `{ code, message, field, severity }` while preserving current Chinese messages.
+- Classify issues as blocking, review-only, or informational.
+- Update close blockers and export rows to include stable issue codes.
+- Add tests for every blocker and review status category.
+
+## Phase 5: Commercial Rule Extensibility — NOT STARTED
+
+Status: **Not Started**
+
+Goals:
+
+- Support realistic payroll variations while keeping historical results stable.
+
+Remaining features:
+
+- Add categorized salary components for bonuses, deductions, reimbursements, and one-time payroll adjustments.
+- Add effective-date lookup for salary components and store rules in open historical months.
+- Add optional overtime tiers and capped leave deduction policies.
+- Add impact preview for store rule changes before committing settings.
+- Keep all formula extensions behind versioned config and migration rules.
+
+## Phase 6: Export and Audit Metadata — NOT STARTED
+
+Status: **Not Started**
+
+Goals:
+
+- Make exported payroll data auditable and suitable for real payment handoff workflows.
+
+Remaining features:
+
+- Add structured JSON export with metadata for workspace version, app version, store, month, export status, and generated time.
+- Add CSV metadata sidecar or header block without breaking current CSV consumers.
+- Add snapshot hash or row hash for closed exports.
+- Add selective exports for confirmed rows, exception rows, and all stores in a month.
+- Add export format versioning.
+
+## Phase 7: Testing Strategy — PARTIALLY COMPLETED
+
+Status: **Partially Completed**
+
+Goals:
+
+- Prevent payroll rule regressions from reaching user data.
+
+Completed work:
+
+- Existing tests cover generic workspace state, exports, validation, stage totals, and unconfigured salary exclusion.
+
+Remaining features:
+
+- Add tests for all review status categories.
+- Add tests for negative special adjustments and large positive adjustments.
+- Add tests for closed snapshot stability after salary and rule changes.
+- Add formula trace parity tests once detailed calculation exists.
+- Add export metadata and issue-code tests once structured export exists.
 
 ## Implementation Rules
 
-- Do not change the closed-month behavior: snapshots are read-only and never recomputed.
-- Do not change `round2()` rounding strategy without verifying that historical payroll totals remain stable.
-- Do not remove `includeResigned` parameter from `getEmployeesForStore()` — it is the only mechanism for accessing resigned employee history.
-- Do not add export formats that produce binary blobs without first adding validation.
-- Do not alter the Chinese field labels in `buildExportRows()` without confirming downstream CSV consumers.
+- Do not recalculate closed snapshots from live data.
+- Do not merge forecast, confirmed, and closed totals into a single ambiguous amount.
+- Do not allow close when any row has unconfigured salary, invalid data, or no explicit completion confirmation.
+- Do not change rounding behavior without snapshot compatibility tests.
+- Do not add new payroll components without defining how they appear in export and close snapshots.
+- Do not remove the current Chinese export labels without a migration or compatibility decision.
 
 ## Open Questions
 
-- Should `calculatePayroll()` support async config loading for tenant-specific or localized rules?
-- Should export metadata include a digital signature or hash for tamper evidence?
-- Should overtime tier configuration live in store config or employee profile?
-- Should leave deduction formulas support statutory minimum thresholds (e.g., minimum wage floor)?
+- Which commercial payroll components are required for the first paid release: tax, deductions, reimbursements, performance bonus, or only categorized manual adjustments?
+- Should formula version metadata live on store config, monthly record, or every closed snapshot row?
+- Should open historical months use current salary values, salary adjustment effective dates, or require close before salary changes?
+- Should export hashes be user-visible, machine-readable only, or both?
