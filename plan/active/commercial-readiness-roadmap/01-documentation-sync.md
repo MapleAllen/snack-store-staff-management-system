@@ -5,7 +5,7 @@
 Owner: OpenCode / macOS host
 Dependencies: None
 Working branch: `main`
-Status: IN PROGRESS
+Status: COMPLETE
 
 ## Goal
 

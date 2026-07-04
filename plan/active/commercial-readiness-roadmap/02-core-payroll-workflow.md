@@ -2,10 +2,12 @@
 
 ## Ownership
 
-Owner: UNASSIGNED
+Owner: OpenCode / macOS host
 Dependencies: Documentation Sync complete
 Working branch: `main`
-Status: NOT STARTED
+Starting main SHA: `47b49fcedecca85d1d1938a3d4501b09b57d740c`
+Target OS: macOS
+Status: IN PROGRESS
 
 ## Goal
 
@@ -32,7 +34,7 @@ Status: NOT STARTED
 ## Subgoals
 
 - Add calculation trace output for each payroll row.
-- Add formula version metadata to closed snapshots.
+- Add formula version metadata to closed snapshots. Status: DONE for newly closed snapshot rows; legacy closed snapshots remain unchanged.
 - Add machine-readable validation issues while preserving Chinese UI messages.
 - Add structured payroll adjustment categories beyond the current free numeric special adjustment.
 - Add attendance import preview and validation report.
