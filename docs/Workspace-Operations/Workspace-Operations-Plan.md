@@ -28,6 +28,7 @@ Completed work:
 - Archive refuses the final active store and stores with active current/future employee assignments.
 - Month close validates completion, salary setup, and validation issues before snapshot freeze.
 - Unlock requires a reason and records close history.
+- Newly closed snapshot rows are stamped with current formula version metadata.
 
 ## Phase 2: Month-Based Employee Transfer — DONE
 

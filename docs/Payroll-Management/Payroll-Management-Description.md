@@ -37,7 +37,7 @@ The workflow is implemented across `src/App.jsx`, `src/pages/PayrollPage.jsx`, `
 **Close and unlock**
 
 - `requestClosePayroll()` blocks close when any row is invalid or unconfirmed.
-- `closeStoreMonth()` freezes a deep-cloned snapshot and appends close history.
+- `closeStoreMonth()` freezes a deep-cloned snapshot, stamps each newly closed row with formula version metadata, and appends close history.
 - `confirmClosePayroll()` creates an automatic recovery point after successful close in desktop mode.
 - `unlockStoreMonth()` requires a non-empty reason and clears the frozen snapshot.
 
@@ -46,7 +46,7 @@ The workflow is implemented across `src/App.jsx`, `src/pages/PayrollPage.jsx`, `
 - Uses owner-first blocker and exception summaries from `getPayrollCloseBlockers()`, `getPayrollIssueItems()`, `getPayrollReviewStatus()`, and `getPayrollChangeItems()`.
 - Shows current employee wage components, calculated deductions/additions, recent salary adjustments, and close/unlock history.
 - Shows formula trace steps in the employee detail panel with source fields, formula text, input values, raw values, rounded amounts, and rounding explanations when trace data is available.
-- Older closed snapshots without stored trace show frozen payroll amounts and a short trace-unavailable message instead of recalculating from live data.
+- Older closed snapshots without stored trace or formula metadata show frozen payroll amounts and do not get recalculated or backfilled from live data.
 - `exportCurrentMonth()` exports CSV with either `草稿·未月结` or `正式·已月结` status.
 
 ## Architecture
@@ -103,7 +103,7 @@ Payroll-Management is a page-level workflow over shared data and operation modul
 - CSV export is single active store/month only from the payroll page.
 - Special adjustments are one free numeric field plus note, not categorized adjustment records.
 - Open historical months recalculate from current employee salary and store config unless already closed.
-- Calculation trace exists for newly generated rows and newly closed snapshots, but legacy closed snapshots may not include trace metadata.
+- Calculation trace and formula version metadata exist for newly closed snapshots, but legacy closed snapshots may not include that metadata.
 - No electronic approval, payment status, payslip generation, or employee-facing acknowledgement.
 - Close/unlock audit is per store-month only; there is no global payroll audit log.
 

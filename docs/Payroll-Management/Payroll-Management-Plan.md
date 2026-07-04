@@ -42,6 +42,7 @@ Completed work:
 - Add formula trace steps to the employee detail panel.
 - Add source field labels for every deduction and addition.
 - Add rounding explanations for each monetary step.
+- Add formula version metadata to newly closed snapshot rows without changing frozen payroll amounts.
 
 Remaining features:
 

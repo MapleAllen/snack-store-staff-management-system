@@ -1,5 +1,5 @@
 import { createOpenMonthlyStoreRecord } from "./payrollData.js";
-import { getAssignmentAtMonth, getMonthlyStoreRecord, previousMonth } from "./payrollLogic.js";
+import { clonePayrollFormulaMetadata, getAssignmentAtMonth, getMonthlyStoreRecord, previousMonth } from "./payrollLogic.js";
 
 export function createStore(workspace, { sourceStoreId, name, id, at }) {
   const trimmedName = name.trim();
@@ -79,6 +79,10 @@ export function closeStoreMonth(workspace, { storeId, month, rows, at, eventId, 
   if (rows.some((row) => (row.validationIssues ?? []).length > 0)) throw new Error("仍有无效工资数据");
   const monthBucket = workspace.monthlyRecords[month] ?? {};
   const storeBucket = createOpenMonthlyStoreRecord(monthBucket[storeId]);
+  const snapshot = rows.map((row) => ({
+    ...row,
+    formulaMetadata: row.formulaMetadata ? clonePayrollFormulaMetadata(row.formulaMetadata) : clonePayrollFormulaMetadata(),
+  }));
   return {
     ...workspace,
     monthlyRecords: {
@@ -87,7 +91,7 @@ export function closeStoreMonth(workspace, { storeId, month, rows, at, eventId, 
         ...monthBucket,
         [storeId]: {
           ...storeBucket, status: "closed", closedAt: at, savedAt: at,
-          snapshot: JSON.parse(JSON.stringify(rows)),
+          snapshot: JSON.parse(JSON.stringify(snapshot)),
           closeHistory: [...storeBucket.closeHistory, { id: eventId, type: "closed", at, reason }],
         },
       },

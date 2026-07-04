@@ -1,5 +1,16 @@
 import { createOpenMonthlyStoreRecord, defaultMonthlyEntry } from "./payrollData.js";
 
+export const PAYROLL_FORMULA_METADATA = Object.freeze({
+  version: "core-payroll-v1",
+  engine: "flat-store-month-payroll",
+  rounding: "round2",
+  socialInsurance: "fixed-contribution",
+});
+
+export function clonePayrollFormulaMetadata(metadata = PAYROLL_FORMULA_METADATA) {
+  return JSON.parse(JSON.stringify(metadata));
+}
+
 export function round2(value) {
   return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 }
@@ -458,6 +469,7 @@ export function getStorePayrollRows(workspace, month, store, options = {}) {
       entry: { ...row.entry },
       breakdown: { ...row.breakdown },
       calculationTrace: Array.isArray(row.calculationTrace) ? JSON.parse(JSON.stringify(row.calculationTrace)) : undefined,
+      formulaMetadata: row.formulaMetadata ? clonePayrollFormulaMetadata(row.formulaMetadata) : undefined,
       validationIssues: [],
       recordStatus: "closed",
     }));

@@ -46,9 +46,9 @@ Completed work:
 - `getPayrollChangeItems()` summarizes notable row changes.
 - `getPayrollReviewStatus()` powers UI badges in the payroll workbench and mobile cards.
 
-## Phase 3: Calculation Traceability — PARTIALLY COMPLETED
+## Phase 3: Calculation Traceability — DONE
 
-Status: **Partially Completed**
+Status: **Done**
 
 Goals:
 
@@ -59,10 +59,8 @@ Completed work:
 - Add `calculatePayrollDetailed()` returning `{ breakdown, steps }` with source fields, formula text, intermediate values, and rounding results.
 - Show calculation steps in the employee detail panel without changing the summary-first payroll workflow.
 - Add tests proving the detailed trace totals match the existing flat breakdown.
-
-Remaining features:
-
-- Add formula version metadata to closed snapshots.
+- Add `PAYROLL_FORMULA_METADATA` and stamp newly closed snapshot rows with `core-payroll-v1` metadata.
+- Preserve stored formula metadata for closed rows while leaving older snapshots without metadata untouched.
 
 ## Phase 4: Machine-Readable Validation — NOT STARTED
 
@@ -124,6 +122,7 @@ Completed work:
 - Existing tests cover generic workspace state, exports, validation, stage totals, and unconfigured salary exclusion.
 - Formula trace parity tests prove detailed calculation totals match the existing flat breakdown.
 - Closed snapshot tests cover stored trace preservation and old snapshot behavior without live recalculation.
+- Closed snapshot tests cover formula metadata stamping, preservation, and legacy snapshot compatibility.
 
 Remaining features:
 

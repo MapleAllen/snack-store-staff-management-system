@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createInitialWorkspace, migrateWorkspace } from "./payrollData.js";
 import {
+  PAYROLL_FORMULA_METADATA,
   buildExportRows,
   calculatePayroll,
   calculatePayrollDetailed,
@@ -118,7 +119,7 @@ describe("payroll validation and stage totals", () => {
     const store = workspace.stores[0];
     const rows = getStorePayrollRows(workspace, "2026-06", store);
     const storedTrace = [{ id: "stored-trace", label: "已冻结追踪", group: "total", sourceFields: [], formula: "snapshot", inputs: {}, rawValue: 1, amount: 1, rounding: { method: "none", precision: null, applied: false } }];
-    const snapshotRow = { ...rows[0], calculationTrace: storedTrace };
+    const snapshotRow = { ...rows[0], calculationTrace: storedTrace, formulaMetadata: PAYROLL_FORMULA_METADATA };
     const closedWorkspace = {
       ...workspace,
       stores: workspace.stores.map((item) => item.id === store.id ? { ...item, config: { ...item.config, auditPassedBonus: 9999 } } : item),
@@ -138,6 +139,8 @@ describe("payroll validation and stage totals", () => {
     expect(closedRows[0].calculationTrace).toEqual(storedTrace);
     expect(closedRows[0].calculationTrace).not.toBe(storedTrace);
     expect(closedRows[0].calculationTrace[0].rounding).not.toBe(storedTrace[0].rounding);
+    expect(closedRows[0].formulaMetadata).toEqual(PAYROLL_FORMULA_METADATA);
+    expect(closedRows[0].formulaMetadata).not.toBe(snapshotRow.formulaMetadata);
   });
 
   it("does not recalculate trace for old closed snapshots without stored trace", () => {
@@ -163,6 +166,7 @@ describe("payroll validation and stage totals", () => {
     expect(closedRows).toHaveLength(1);
     expect(closedRows[0].breakdown).toEqual(oldSnapshotRow.breakdown);
     expect(closedRows[0].calculationTrace).toBeUndefined();
+    expect(closedRows[0].formulaMetadata).toBeUndefined();
     expect(calculationTrace).toHaveLength(11);
   });
 

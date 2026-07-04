@@ -38,7 +38,7 @@ The module is implemented in `src/workspaceOperations.js`. Every exported functi
 
 - `closeStoreMonth(workspace, { storeId, month, rows, at, eventId, reason })` closes one store-month.
 - Refuses close when any row lacks `entry.isComplete`, has unconfigured salary, or has validation issues.
-- Writes a deep-cloned `snapshot` of the passed rows and sets `status: "closed"`, `closedAt`, and `savedAt`.
+- Writes a deep-cloned `snapshot` of the passed rows, stamps each row with current formula version metadata, and sets `status: "closed"`, `closedAt`, and `savedAt`.
 - Appends a `{ id, type: "closed", at, reason }` event to `closeHistory`.
 - `unlockStoreMonth(workspace, { storeId, month, at, eventId, reason })` requires a non-empty reason, sets the record back to `open`, clears `closedAt` and `snapshot`, and appends an unlock event.
 
@@ -59,7 +59,7 @@ Workspace-Operations is a pure operation layer over the workspace object. It dep
 - `transferEmployee(workspace, options)`
   - Month-based assignment split and monthly row relocation.
 - `closeStoreMonth(workspace, options)`
-  - Month close validation and snapshot freezing.
+  - Month close validation, formula metadata stamping, and snapshot freezing.
 - `unlockStoreMonth(workspace, options)`
   - Reasoned unlock and close history update.
 
