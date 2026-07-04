@@ -29,19 +29,22 @@ Completed work:
 - Store-month close freezes snapshots and unlock requires a reason.
 - Draft/formal CSV export status is explicit.
 
-## Phase 2: Review Transparency — NOT STARTED
+## Phase 2: Review Transparency — PARTIALLY COMPLETED
 
-Status: **Not Started**
+Status: **Partially Completed**
 
 Goals:
 
 - Make every payroll amount explainable without requiring code knowledge.
 
-Remaining features:
+Completed work:
 
 - Add formula trace steps to the employee detail panel.
 - Add source field labels for every deduction and addition.
 - Add rounding explanations for each monetary step.
+
+Remaining features:
+
 - Add close confirmation summary grouped by blockers, review-only exceptions, and clean rows.
 
 ## Phase 3: Structured Adjustments and Attendance Import — NOT STARTED

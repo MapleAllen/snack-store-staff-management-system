@@ -45,6 +45,8 @@ The workflow is implemented across `src/App.jsx`, `src/pages/PayrollPage.jsx`, `
 
 - Uses owner-first blocker and exception summaries from `getPayrollCloseBlockers()`, `getPayrollIssueItems()`, `getPayrollReviewStatus()`, and `getPayrollChangeItems()`.
 - Shows current employee wage components, calculated deductions/additions, recent salary adjustments, and close/unlock history.
+- Shows formula trace steps in the employee detail panel with source fields, formula text, input values, raw values, rounded amounts, and rounding explanations when trace data is available.
+- Older closed snapshots without stored trace show frozen payroll amounts and a short trace-unavailable message instead of recalculating from live data.
 - `exportCurrentMonth()` exports CSV with either `草稿·未月结` or `正式·已月结` status.
 
 ## Architecture
@@ -99,15 +101,14 @@ Payroll-Management is a page-level workflow over shared data and operation modul
 
 - Payroll has no batch import from attendance systems or spreadsheets.
 - CSV export is single active store/month only from the payroll page.
-- Calculation detail is itemized but not a full formula trace with source values and rounding steps.
 - Special adjustments are one free numeric field plus note, not categorized adjustment records.
 - Open historical months recalculate from current employee salary and store config unless already closed.
+- Calculation trace exists for newly generated rows and newly closed snapshots, but legacy closed snapshots may not include trace metadata.
 - No electronic approval, payment status, payslip generation, or employee-facing acknowledgement.
 - Close/unlock audit is per store-month only; there is no global payroll audit log.
 
 ## Future Directions
 
-- Add calculation trace drill-down for every salary component.
 - Add categorized payroll adjustments with approval state.
 - Add attendance import and validation preview.
 - Add multi-store month close workflow from the overview.

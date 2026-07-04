@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { createInitialWorkspace, migrateWorkspace } from "./payrollData.js";
 import {
   buildExportRows,
+  calculatePayroll,
+  calculatePayrollDetailed,
   csvEscape,
   getMonthlyStoreRecord,
   getPayrollStageSummary,
@@ -43,6 +45,127 @@ describe("safe exports", () => {
 });
 
 describe("payroll validation and stage totals", () => {
+  it("returns detailed calculation trace without changing payroll totals", () => {
+    const employee = {
+      id: "employee-trace",
+      name: "示例员工 Trace",
+      salaryConfigured: true,
+      baseSalary: 3200,
+      overtimeRate: 18.5,
+      attendanceBonus: 200,
+    };
+    const entry = {
+      overtimeHours: "3.5",
+      leaveDays: "1.5",
+      leaveHours: "2",
+      nightShiftHours: "4",
+      auditPassed: true,
+      specialAdjustment: "-33.335",
+      note: "",
+      isComplete: false,
+      completedAt: null,
+    };
+    const config = {
+      socialInsuranceBase: 800,
+      mealAllowanceBase: 200,
+      auditPassedBonus: 260,
+      auditFallbackBonus: 100,
+      nightShiftRate: 10,
+      leaveDaysDivisor: 30,
+      leaveHoursDivisor: 270,
+      monthDays: 30,
+    };
+
+    const detailed = calculatePayrollDetailed(employee, entry, config);
+    expect(detailed.breakdown).toEqual(calculatePayroll(employee, entry, config));
+
+    const byId = Object.fromEntries(detailed.steps.map((step) => [step.id, step]));
+    expect(byId["leave-days-deduction"]).toMatchObject({
+      group: "deduction",
+      sourceFields: ["employee.baseSalary", "config.leaveDaysDivisor", "entry.leaveDays"],
+      formula: "基础工资 / 请假天数除数 * 请假天数",
+      amount: detailed.breakdown.leaveDaysDeduction,
+      rounding: { method: "round2", precision: 2, applied: true },
+    });
+    expect(byId["overtime-pay"]).toMatchObject({
+      group: "addition",
+      sourceFields: ["entry.overtimeHours", "employee.overtimeRate"],
+      amount: detailed.breakdown.overtimePay,
+    });
+    expect(byId["social-insurance"]).toMatchObject({
+      formula: "社保补助基数固定发放",
+      amount: detailed.breakdown.socialInsurance,
+    });
+    expect(byId["meal-allowance"]).toMatchObject({
+      sourceFields: ["config.mealAllowanceBase", "config.monthDays", "entry.leaveDays"],
+      amount: detailed.breakdown.mealAllowance,
+    });
+    expect(byId["special-adjustment"]).toMatchObject({
+      sourceFields: ["entry.specialAdjustment"],
+      rawValue: -33.335,
+      amount: -33.335,
+      rounding: { method: "none", precision: null, applied: false },
+    });
+    expect(byId["net-salary"]).toMatchObject({
+      group: "total",
+      amount: detailed.breakdown.netSalary,
+      rounding: { method: "round2", precision: 2, applied: true },
+    });
+  });
+
+  it("preserves stored calculation trace for closed snapshots", () => {
+    const workspace = createInitialWorkspace();
+    const store = workspace.stores[0];
+    const rows = getStorePayrollRows(workspace, "2026-06", store);
+    const storedTrace = [{ id: "stored-trace", label: "已冻结追踪", group: "total", sourceFields: [], formula: "snapshot", inputs: {}, rawValue: 1, amount: 1, rounding: { method: "none", precision: null, applied: false } }];
+    const snapshotRow = { ...rows[0], calculationTrace: storedTrace };
+    const closedWorkspace = {
+      ...workspace,
+      stores: workspace.stores.map((item) => item.id === store.id ? { ...item, config: { ...item.config, auditPassedBonus: 9999 } } : item),
+      monthlyRecords: {
+        "2026-06": {
+          [store.id]: {
+            status: "closed",
+            snapshot: [snapshotRow],
+          },
+        },
+      },
+    };
+
+    const closedRows = getStorePayrollRows(closedWorkspace, "2026-06", closedWorkspace.stores[0]);
+    expect(closedRows).toHaveLength(1);
+    expect(closedRows[0].breakdown).toEqual(snapshotRow.breakdown);
+    expect(closedRows[0].calculationTrace).toEqual(storedTrace);
+    expect(closedRows[0].calculationTrace).not.toBe(storedTrace);
+    expect(closedRows[0].calculationTrace[0].rounding).not.toBe(storedTrace[0].rounding);
+  });
+
+  it("does not recalculate trace for old closed snapshots without stored trace", () => {
+    const workspace = createInitialWorkspace();
+    const store = workspace.stores[0];
+    const rows = getStorePayrollRows(workspace, "2026-06", store);
+    const { calculationTrace, ...oldSnapshotRow } = rows[0];
+    const closedWorkspace = {
+      ...workspace,
+      employees: workspace.employees.map((employee) => employee.id === rows[0].employee.id ? { ...employee, baseSalary: 9999 } : employee),
+      stores: workspace.stores.map((item) => item.id === store.id ? { ...item, config: { ...item.config, mealAllowanceBase: 9999 } } : item),
+      monthlyRecords: {
+        "2026-06": {
+          [store.id]: {
+            status: "closed",
+            snapshot: [oldSnapshotRow],
+          },
+        },
+      },
+    };
+
+    const closedRows = getStorePayrollRows(closedWorkspace, "2026-06", closedWorkspace.stores[0]);
+    expect(closedRows).toHaveLength(1);
+    expect(closedRows[0].breakdown).toEqual(oldSnapshotRow.breakdown);
+    expect(closedRows[0].calculationTrace).toBeUndefined();
+    expect(calculationTrace).toHaveLength(11);
+  });
+
   it("separates forecast, confirmed and closed totals", () => {
     const workspace = createInitialWorkspace();
     const store = workspace.stores[0];
