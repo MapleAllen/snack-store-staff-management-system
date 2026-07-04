@@ -1,5 +1,16 @@
 import { createOpenMonthlyStoreRecord, defaultMonthlyEntry } from "./payrollData.js";
 
+export const PAYROLL_FORMULA_METADATA = Object.freeze({
+  version: "core-payroll-v1",
+  engine: "flat-store-month-payroll",
+  rounding: "round2",
+  socialInsurance: "fixed-contribution",
+});
+
+export function clonePayrollFormulaMetadata(metadata = PAYROLL_FORMULA_METADATA) {
+  return JSON.parse(JSON.stringify(metadata));
+}
+
 export function round2(value) {
   return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 }
@@ -131,7 +142,29 @@ export function getMonthlyStoreRecord(workspace, month, storeId) {
   return createOpenMonthlyStoreRecord(workspace.monthlyRecords?.[month]?.[storeId]);
 }
 
-export function calculatePayroll(employee, entry, config) {
+function traceStep({ id, label, group, sourceFields, formula, inputs, rawValue, amount, rounding }) {
+  return {
+    id,
+    label,
+    group,
+    sourceFields,
+    formula,
+    inputs,
+    rawValue,
+    amount,
+    rounding,
+  };
+}
+
+function noRounding() {
+  return { method: "none", precision: null, applied: false };
+}
+
+function round2Trace() {
+  return { method: "round2", precision: 2, applied: true };
+}
+
+export function calculatePayrollDetailed(employee, entry, config) {
   if (!employee) return null;
   const overtimeHours = toNumber(entry.overtimeHours);
   const leaveDays = toNumber(entry.leaveDays);
@@ -142,23 +175,185 @@ export function calculatePayroll(employee, entry, config) {
   const leaveDaysDivisor = Number(config.leaveDaysDivisor) > 0 ? Number(config.leaveDaysDivisor) : 1;
   const leaveHoursDivisor = Number(config.leaveHoursDivisor) > 0 ? Number(config.leaveHoursDivisor) : 1;
   const monthDays = Number(config.monthDays) > 0 ? Number(config.monthDays) : 1;
-  const leaveDaysDeduction = round2((employee.baseSalary / leaveDaysDivisor) * leaveDays);
-  const leaveHoursDeduction = round2((employee.baseSalary / leaveHoursDivisor) * leaveHours);
-  const overtimePay = round2(overtimeHours * employee.overtimeRate);
-  const nightShiftPay = round2(nightShiftHours * config.nightShiftRate);
+  const workedMealDays = Math.max(0, monthDays - leaveDays);
+  const leaveDaysDeductionRaw = (employee.baseSalary / leaveDaysDivisor) * leaveDays;
+  const leaveHoursDeductionRaw = (employee.baseSalary / leaveHoursDivisor) * leaveHours;
+  const overtimePayRaw = overtimeHours * employee.overtimeRate;
+  const nightShiftPayRaw = nightShiftHours * config.nightShiftRate;
+  const socialInsuranceRaw = config.socialInsuranceBase;
+  const mealAllowanceRaw = (config.mealAllowanceBase / monthDays) * workedMealDays;
+  const leaveDaysDeduction = round2(leaveDaysDeductionRaw);
+  const leaveHoursDeduction = round2(leaveHoursDeductionRaw);
+  const overtimePay = round2(overtimePayRaw);
+  const nightShiftPay = round2(nightShiftPayRaw);
   const attendancePay = attendanceEligible ? employee.attendanceBonus : 0;
   const auditPay = entry.auditPassed ? config.auditPassedBonus : config.auditFallbackBonus;
-  const socialInsurance = round2(config.socialInsuranceBase);
-  const mealAllowance = round2((config.mealAllowanceBase / monthDays) * Math.max(0, monthDays - leaveDays));
-  const netSalary = round2(
-    employee.baseSalary - leaveDaysDeduction - leaveHoursDeduction + overtimePay + nightShiftPay +
-      attendancePay + auditPay + socialInsurance + mealAllowance + specialAdjustment,
-  );
-  return {
+  const socialInsurance = round2(socialInsuranceRaw);
+  const mealAllowance = round2(mealAllowanceRaw);
+  const netSalaryRaw = employee.baseSalary - leaveDaysDeduction - leaveHoursDeduction + overtimePay + nightShiftPay +
+    attendancePay + auditPay + socialInsurance + mealAllowance + specialAdjustment;
+  const netSalary = round2(netSalaryRaw);
+  const breakdown = {
     overtimeHours, leaveDays, leaveHours, nightShiftHours, specialAdjustment, attendanceEligible,
     leaveDaysDeduction, leaveHoursDeduction, overtimePay, nightShiftPay, attendancePay, auditPay,
     socialInsurance, mealAllowance, netSalary,
   };
+  return {
+    breakdown,
+    steps: [
+      traceStep({
+        id: "base-salary",
+        label: "基础工资",
+        group: "base",
+        sourceFields: ["employee.baseSalary"],
+        formula: "基础工资",
+        inputs: { baseSalary: employee.baseSalary },
+        rawValue: employee.baseSalary,
+        amount: employee.baseSalary,
+        rounding: noRounding(),
+      }),
+      traceStep({
+        id: "leave-days-deduction",
+        label: "请假天数扣减",
+        group: "deduction",
+        sourceFields: ["employee.baseSalary", "config.leaveDaysDivisor", "entry.leaveDays"],
+        formula: "基础工资 / 请假天数除数 * 请假天数",
+        inputs: { baseSalary: employee.baseSalary, leaveDaysDivisor, leaveDays },
+        rawValue: leaveDaysDeductionRaw,
+        amount: leaveDaysDeduction,
+        rounding: round2Trace(),
+      }),
+      traceStep({
+        id: "leave-hours-deduction",
+        label: "请假小时扣减",
+        group: "deduction",
+        sourceFields: ["employee.baseSalary", "config.leaveHoursDivisor", "entry.leaveHours"],
+        formula: "基础工资 / 请假小时除数 * 请假小时",
+        inputs: { baseSalary: employee.baseSalary, leaveHoursDivisor, leaveHours },
+        rawValue: leaveHoursDeductionRaw,
+        amount: leaveHoursDeduction,
+        rounding: round2Trace(),
+      }),
+      traceStep({
+        id: "overtime-pay",
+        label: "加班工资",
+        group: "addition",
+        sourceFields: ["entry.overtimeHours", "employee.overtimeRate"],
+        formula: "加班时长 * 加班时薪",
+        inputs: { overtimeHours, overtimeRate: employee.overtimeRate },
+        rawValue: overtimePayRaw,
+        amount: overtimePay,
+        rounding: round2Trace(),
+      }),
+      traceStep({
+        id: "night-shift-pay",
+        label: "夜班补贴",
+        group: "addition",
+        sourceFields: ["entry.nightShiftHours", "config.nightShiftRate"],
+        formula: "夜班时长 * 夜班每小时补贴",
+        inputs: { nightShiftHours, nightShiftRate: config.nightShiftRate },
+        rawValue: nightShiftPayRaw,
+        amount: nightShiftPay,
+        rounding: round2Trace(),
+      }),
+      traceStep({
+        id: "attendance-pay",
+        label: "全勤奖金",
+        group: "addition",
+        sourceFields: ["entry.leaveDays", "entry.leaveHours", "employee.attendanceBonus"],
+        formula: "请假天数与请假小时均为 0 时发放全勤奖金",
+        inputs: { leaveDays, leaveHours, attendanceBonus: employee.attendanceBonus, attendanceEligible },
+        rawValue: attendancePay,
+        amount: attendancePay,
+        rounding: noRounding(),
+      }),
+      traceStep({
+        id: "audit-pay",
+        label: "稽核奖金",
+        group: "addition",
+        sourceFields: ["entry.auditPassed", "config.auditPassedBonus", "config.auditFallbackBonus"],
+        formula: "稽核达标取达标奖励，否则取未达标保底",
+        inputs: {
+          auditPassed: Boolean(entry.auditPassed),
+          auditPassedBonus: config.auditPassedBonus,
+          auditFallbackBonus: config.auditFallbackBonus,
+        },
+        rawValue: auditPay,
+        amount: auditPay,
+        rounding: noRounding(),
+      }),
+      traceStep({
+        id: "social-insurance",
+        label: "社保补助",
+        group: "addition",
+        sourceFields: ["config.socialInsuranceBase"],
+        formula: "社保补助基数固定发放",
+        inputs: { socialInsuranceBase: config.socialInsuranceBase },
+        rawValue: socialInsuranceRaw,
+        amount: socialInsurance,
+        rounding: round2Trace(),
+      }),
+      traceStep({
+        id: "meal-allowance",
+        label: "饭补",
+        group: "addition",
+        sourceFields: ["config.mealAllowanceBase", "config.monthDays", "entry.leaveDays"],
+        formula: "饭补基数 / 每月计薪天数 * max(0, 每月计薪天数 - 请假天数)",
+        inputs: { mealAllowanceBase: config.mealAllowanceBase, monthDays, leaveDays, workedMealDays },
+        rawValue: mealAllowanceRaw,
+        amount: mealAllowance,
+        rounding: round2Trace(),
+      }),
+      traceStep({
+        id: "special-adjustment",
+        label: "特殊加减项",
+        group: "addition",
+        sourceFields: ["entry.specialAdjustment"],
+        formula: "本月特殊加减项",
+        inputs: { specialAdjustment },
+        rawValue: specialAdjustment,
+        amount: specialAdjustment,
+        rounding: noRounding(),
+      }),
+      traceStep({
+        id: "net-salary",
+        label: "实发工资",
+        group: "total",
+        sourceFields: [
+          "employee.baseSalary",
+          "breakdown.leaveDaysDeduction",
+          "breakdown.leaveHoursDeduction",
+          "breakdown.overtimePay",
+          "breakdown.nightShiftPay",
+          "breakdown.attendancePay",
+          "breakdown.auditPay",
+          "breakdown.socialInsurance",
+          "breakdown.mealAllowance",
+          "breakdown.specialAdjustment",
+        ],
+        formula: "基础工资 - 请假天数扣减 - 请假小时扣减 + 加班工资 + 夜班补贴 + 全勤奖金 + 稽核奖金 + 社保补助 + 饭补 + 特殊加减项",
+        inputs: {
+          baseSalary: employee.baseSalary,
+          leaveDaysDeduction,
+          leaveHoursDeduction,
+          overtimePay,
+          nightShiftPay,
+          attendancePay,
+          auditPay,
+          socialInsurance,
+          mealAllowance,
+          specialAdjustment,
+        },
+        rawValue: netSalaryRaw,
+        amount: netSalary,
+        rounding: round2Trace(),
+      }),
+    ],
+  };
+}
+
+export function calculatePayroll(employee, entry, config) {
+  return calculatePayrollDetailed(employee, entry, config)?.breakdown ?? null;
 }
 
 export function buildExportRows(store, rows, exportStatus = "草稿") {
@@ -273,6 +468,8 @@ export function getStorePayrollRows(workspace, month, store, options = {}) {
       employee: { ...row.employee, salaryConfigured: row.employee?.salaryConfigured !== false },
       entry: { ...row.entry },
       breakdown: { ...row.breakdown },
+      calculationTrace: Array.isArray(row.calculationTrace) ? JSON.parse(JSON.stringify(row.calculationTrace)) : undefined,
+      formulaMetadata: row.formulaMetadata ? clonePayrollFormulaMetadata(row.formulaMetadata) : undefined,
       validationIssues: [],
       recordStatus: "closed",
     }));
@@ -280,6 +477,7 @@ export function getStorePayrollRows(workspace, month, store, options = {}) {
   const employees = getEmployeesForStore(workspace, store.id, month, options);
   return employees.map((employee) => {
     const entry = cloneDefaultEntry(monthlyStore.rows[employee.id]);
+    const calculation = calculatePayrollDetailed(employee, entry, store.config);
     const validationIssues = [
       ...validateEmployeeSalary(employee),
       ...validatePayrollEntry(entry, store.config),
@@ -287,7 +485,8 @@ export function getStorePayrollRows(workspace, month, store, options = {}) {
     return {
       employee,
       entry,
-      breakdown: calculatePayroll(employee, entry, store.config),
+      breakdown: calculation.breakdown,
+      calculationTrace: calculation.steps,
       validationIssues: [...new Set(validationIssues)],
       recordStatus: monthlyStore.status,
     };

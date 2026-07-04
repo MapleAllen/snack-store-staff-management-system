@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createInitialWorkspace, migrateWorkspace } from "./payrollData.js";
-import { getAssignmentAtMonth, getMonthlyStoreRecord, getStorePayrollRows } from "./payrollLogic.js";
+import { PAYROLL_FORMULA_METADATA, getAssignmentAtMonth, getMonthlyStoreRecord, getStorePayrollRows } from "./payrollLogic.js";
 import {
   archiveStore,
   closeStoreMonth,
@@ -87,6 +87,22 @@ describe("payroll close and unlock", () => {
     const record = getMonthlyStoreRecord(unlocked, "2026-06", store.id);
     expect(record.status).toBe("open");
     expect(record.closeHistory.at(-1).reason).toBe("发现考勤遗漏");
+  });
+
+  it("stamps closed snapshot rows with formula version metadata", () => {
+    const initial = createInitialWorkspace();
+    const store = initial.stores[0];
+    const rows = getStorePayrollRows(initial, "2026-06", store)
+      .map((row) => ({ ...row, entry: { ...row.entry, isComplete: true } }));
+    const closed = closeStoreMonth(initial, { storeId: store.id, month: "2026-06", rows, at: "2026-06-20T00:00:00Z", eventId: "close-1", reason: "工资核对完成" });
+    const snapshot = getMonthlyStoreRecord(closed, "2026-06", store.id).snapshot;
+
+    expect(snapshot).toHaveLength(rows.length);
+    expect(snapshot.every((row) => row.formulaMetadata?.version === PAYROLL_FORMULA_METADATA.version)).toBe(true);
+
+    const closedRows = getStorePayrollRows(closed, "2026-06", store);
+    expect(closedRows[0].formulaMetadata).toEqual(PAYROLL_FORMULA_METADATA);
+    expect(closedRows[0].formulaMetadata).not.toBe(snapshot[0].formulaMetadata);
   });
 
   it("refuses to close when an employee has not confirmed input", () => {

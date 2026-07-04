@@ -22,6 +22,59 @@ const ENTRY_FIELD_LABELS = {
   specialAdjustment: "特殊加减项",
 };
 
+const TRACE_GROUPS = [
+  { id: "base", label: "基础项" },
+  { id: "deduction", label: "扣减追踪" },
+  { id: "addition", label: "增加追踪" },
+  { id: "total", label: "实发汇总" },
+];
+
+const TRACE_SOURCE_LABELS = {
+  "employee.baseSalary": "员工基础工资",
+  "employee.overtimeRate": "员工加班时薪",
+  "employee.attendanceBonus": "员工全勤奖金",
+  "entry.overtimeHours": "本月加班时长",
+  "entry.leaveDays": "本月请假天数",
+  "entry.leaveHours": "本月请假小时",
+  "entry.nightShiftHours": "本月夜班时长",
+  "entry.auditPassed": "本月稽核状态",
+  "entry.specialAdjustment": "本月特殊加减项",
+  "config.leaveDaysDivisor": "门店请假天数除数",
+  "config.leaveHoursDivisor": "门店请假小时除数",
+  "config.monthDays": "门店每月计薪天数",
+  "config.nightShiftRate": "门店夜班补贴",
+  "config.auditPassedBonus": "门店稽核达标奖励",
+  "config.auditFallbackBonus": "门店稽核未达标保底",
+  "config.socialInsuranceBase": "门店社保补助基数",
+  "config.mealAllowanceBase": "门店饭补基数",
+  "breakdown.leaveDaysDeduction": "请假天数扣减结果",
+  "breakdown.leaveHoursDeduction": "请假小时扣减结果",
+  "breakdown.overtimePay": "加班工资结果",
+  "breakdown.nightShiftPay": "夜班补贴结果",
+  "breakdown.attendancePay": "全勤奖金结果",
+  "breakdown.auditPay": "稽核奖金结果",
+  "breakdown.socialInsurance": "社保补助结果",
+  "breakdown.mealAllowance": "饭补结果",
+  "breakdown.specialAdjustment": "特殊加减项结果",
+};
+
+function formatTraceValue(value) {
+  if (typeof value === "boolean") return value ? "是" : "否";
+  if (typeof value === "number") return Number.isInteger(value) ? `${value}` : `${Number(value.toFixed(4))}`;
+  return `${value ?? ""}`;
+}
+
+function formatTraceAmount(step) {
+  const prefix = step.group === "deduction" ? "- " : step.group === "addition" && step.amount >= 0 ? "+ " : "";
+  return `${prefix}${formatCurrency(step.amount)}`;
+}
+
+function formatTraceRounding(step) {
+  if (!step.rounding?.applied) return "未额外取整";
+  if (step.rawValue === step.amount) return "按两位小数保留，金额未变化";
+  return `原始值 ${formatTraceValue(step.rawValue)}，按两位小数取整`;
+}
+
 export function PayrollPage({
   activeStore,
   activeMonth,
@@ -737,6 +790,42 @@ export function PayrollPage({
                   <span>{isLocked ? "已月结实发" : selectedReviewRow.entry.isComplete ? "已确认实发" : "预计实发"}</span>
                   <strong>{selectedReviewRow.employee.salaryConfigured ? formatCurrency(selectedReviewRow.breakdown.netSalary) : "待设置"}</strong>
                 </div>
+
+                {Array.isArray(selectedReviewRow.calculationTrace) && selectedReviewRow.calculationTrace.length > 0 ? (
+                  <div className="formula-list formula-list--trace">
+                    {TRACE_GROUPS.map((group) => {
+                      const steps = selectedReviewRow.calculationTrace.filter((step) => step.group === group.id);
+                      if (steps.length === 0) return null;
+                      return (
+                        <div className="formula-list__group" key={group.id}>
+                          <span className="formula-list__title">{group.label}</span>
+                          <dl>
+                            {steps.map((step) => (
+                              <div key={step.id}>
+                                <dt>
+                                  <strong>{step.label}</strong>
+                                  <span>{step.formula}</span>
+                                  <span>
+                                    来源：
+                                    {step.sourceFields.map((field) => TRACE_SOURCE_LABELS[field] ?? field).join("、")}
+                                  </span>
+                                  <span>
+                                    输入：
+                                    {Object.entries(step.inputs ?? {}).map(([key, value]) => `${key}=${formatTraceValue(value)}`).join("，")}
+                                  </span>
+                                  <span>{formatTraceRounding(step)}</span>
+                                </dt>
+                                <dd>{formatTraceAmount(step)}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="timeline__empty">当前记录没有保存计算追踪；旧月结快照仍按冻结金额展示。</p>
+                )}
               </div>
 
               <div className="detail-card">

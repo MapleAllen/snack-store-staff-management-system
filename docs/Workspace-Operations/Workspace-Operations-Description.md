@@ -1,4 +1,4 @@
-# Workspace-Operations - Description
+# Workspace-Operations Module Description
 
 ## Module Name
 
@@ -6,90 +6,102 @@ Workspace-Operations
 
 ## Purpose
 
-Implements store lifecycle management (create, rename, archive, restore), employee transfers across stores/months, and payroll month close/unlock with frozen snapshots and reasoned history tracking.
+Workspace-Operations contains the pure workspace mutation functions for store lifecycle, employee transfers, and payroll month close/unlock. It protects the local payroll workspace from destructive store deletion, invalid transfer plans, and accidental modification of closed payroll results.
 
 ## Current Implementation
+
+The module is implemented in `src/workspaceOperations.js`. Every exported function accepts a workspace object and options, validates preconditions, and returns a new workspace object. It does not generate IDs, show UI, save files, or mutate React state directly; `src/App.jsx` handles those responsibilities.
 
 ### Capabilities
 
 **Store lifecycle**
-- `createStore(workspace, { sourceStoreId, name, id, at })`: clones a new store from a source store's config, enforces name uniqueness, sets status to active, and records creation timestamp.
-- `renameStore(workspace, { storeId, name })`: renames a store with uniqueness validation.
-- `archiveStore(workspace, { storeId, month, at })`: archives a store. Refuses if it is the last active store, or if any active employee still has current or future assignments to it.
-- `restoreStore(workspace, storeId)`: restores an archived store to active, clearing the archivedAt timestamp.
+
+- `createStore(workspace, { sourceStoreId, name, id, at })` trims and validates the store name, prevents duplicate names, copies payroll config from an existing source store, and creates an active store.
+- `renameStore(workspace, { storeId, name })` trims and validates the new name and prevents duplicates.
+- `archiveStore(workspace, { storeId, month, at })` archives a store instead of deleting it.
+- `archiveStore()` refuses to archive the last active store.
+- `archiveStore()` refuses to archive a store that still has current or future assignments for non-resigned employees.
+- `restoreStore(workspace, storeId)` marks a store active again and clears `archivedAt`.
 
 **Employee transfer**
-- `transferEmployee(workspace, { employeeId, targetStoreId, effectiveMonth, currentMonth, at, assignmentId, note })`: moves an employee between stores starting from an effective month.
-- Validates: effective month not before current month, target store is active and different from source, no conflicting future transfers, no closed months in the affected range, no duplicate employee data at target store for any affected month.
-- Closes the current assignment at the month before the effective month, creates a new assignment for the target store.
-- Moves the employee's monthly row data across all affected months from the source store to the target store.
 
-**Month close and unlock**
-- `closeStoreMonth(workspace, { storeId, month, rows, at, eventId, reason })`: freezes payroll for a store-month. Validates all employees confirmed, salaries set, and no validation errors. Writes a deep-cloned snapshot of rows, sets status to closed, and appends to closeHistory.
-- `unlockStoreMonth(workspace, { storeId, month, at, eventId, reason })`: reopens a frozen month. Requires a non-empty reason string. Clears snapshot, sets status to open, and appends an unlock event to closeHistory.
-- Both functions record event IDs, timestamps, and reasons in closeHistory for audit trail.
+- `transferEmployee(workspace, { employeeId, targetStoreId, effectiveMonth, currentMonth, at, assignmentId, note })` creates a month-based transfer from the employee's source assignment to an active target store.
+- Refuses transfers with an effective month before the current month.
+- Refuses transfers to inactive, missing, or same-source stores.
+- Refuses transfer when the employee already has a future assignment after `currentMonth`.
+- Refuses transfer if any affected source or target month is closed.
+- Refuses transfer if target monthly data already contains the employee row.
+- Moves existing monthly row data from source store to target store for every affected open month at or after the effective month.
+- Ends the previous assignment at `previousMonth(effectiveMonth)` and appends a new assignment with the provided ID and note.
 
-### Architecture
+**Payroll close and unlock**
 
-| File | Role |
-|---|---|
-| `src/workspaceOperations.js` | All store, transfer, close, and unlock functions in a single file. |
+- `closeStoreMonth(workspace, { storeId, month, rows, at, eventId, reason })` closes one store-month.
+- Refuses close when any row lacks `entry.isComplete`, has unconfigured salary, or has validation issues.
+- Writes a deep-cloned `snapshot` of the passed rows, stamps each row with current formula version metadata, and sets `status: "closed"`, `closedAt`, and `savedAt`.
+- Appends a `{ id, type: "closed", at, reason }` event to `closeHistory`.
+- `unlockStoreMonth(workspace, { storeId, month, at, eventId, reason })` requires a non-empty reason, sets the record back to `open`, clears `closedAt` and `snapshot`, and appends an unlock event.
 
-**Dependencies**
+## Architecture
 
-| Import | Source | Usage |
-|---|---|---|
-| `createOpenMonthlyStoreRecord` | `payrollData.js` | Normalizes month-store records during transfer and close/unlock |
-| `getAssignmentAtMonth` | `payrollLogic.js` | Finds source assignment during transfer |
-| `getMonthlyStoreRecord` | `payrollLogic.js` | Reads source/target records for transfer data movement |
-| `previousMonth` | `payrollLogic.js` | Computes end month for old assignment during transfer |
+Workspace-Operations is a pure operation layer over the workspace object. It depends on Payroll-Data for record normalization and Payroll-Logic for assignment/month helpers.
 
-**Key exports**
+### Operation Layer (`src/workspaceOperations.js`)
 
-| Export | Type | Description |
-|---|---|---|
-| `createStore(ws, opts)` | function | Clone store from source |
-| `renameStore(ws, opts)` | function | Rename existing store |
-| `archiveStore(ws, opts)` | function | Archive store, guard last-active |
-| `restoreStore(ws, id)` | function | Reactivate archived store |
-| `transferEmployee(ws, opts)` | function | Move employee across stores/months |
-| `closeStoreMonth(ws, opts)` | function | Freeze payroll month |
-| `unlockStoreMonth(ws, opts)` | function | Unfreeze with reason |
+- `createStore(workspace, options)`
+  - Store creation and config cloning.
+- `renameStore(workspace, options)`
+  - Store name update.
+- `archiveStore(workspace, options)`
+  - Store archive guard and archive state update.
+- `restoreStore(workspace, storeId)`
+  - Archived store reactivation.
+- `transferEmployee(workspace, options)`
+  - Month-based assignment split and monthly row relocation.
+- `closeStoreMonth(workspace, options)`
+  - Month close validation, formula metadata stamping, and snapshot freezing.
+- `unlockStoreMonth(workspace, options)`
+  - Reasoned unlock and close history update.
 
-**Workspace mutation pattern**
+### Dependencies
 
-All operations follow an immutable pattern: they return a new workspace object with the mutated portion replaced, leaving the original workspace unmodified. Callers are responsible for saving the returned workspace.
+- `src/payrollData.js`
+  - `createOpenMonthlyStoreRecord()` normalizes records before transfer, close, and unlock writes.
+- `src/payrollLogic.js`
+  - `getAssignmentAtMonth()` identifies the source assignment for transfer.
+  - `getMonthlyStoreRecord()` reads existing month-store rows safely.
+  - `previousMonth()` calculates assignment end months.
 
-**Store statuses**
+## Integration Points
 
-- `active`: operational store, visible in payroll, accepts transfers and employees.
-- `archived`: historical store, retains employees and history, excluded from active selection.
+- `src/App.jsx`
+  - Generates IDs via `makeId()`, calls operations in event handlers, sets React state, shows notices, and creates automatic backups after month close.
+- `src/pages/SettingsPage.jsx`
+  - Triggers create, rename, archive, and restore through props from `App.jsx`.
+- `src/pages/EmployeesPage.jsx`
+  - Triggers transfer and resignation modals through props from `App.jsx`.
+- `src/pages/PayrollPage.jsx`
+  - Triggers close and unlock through props from `App.jsx`.
+- `src/workspaceOperations.test.js`
+  - Covers migration, store lifecycle, transfer, close, and unlock behavior.
 
-**Monthly record statuses**
+## Current Limitations
 
-- `open`: rows are editable, snapshot is null.
-- `closed`: rows are frozen into snapshot, status is locked.
+- Employee resignation and restore are implemented directly in `App.jsx`, not in `workspaceOperations.js`.
+- Salary adjustment creation is implemented directly in `App.jsx`, not in `workspaceOperations.js`.
+- Store config changes and rule history creation are implemented directly in `App.jsx`, not in `workspaceOperations.js`.
+- Operations depend on caller-provided IDs and do not prevent ID collisions internally.
+- `restoreStore()` does not validate whether the store exists or whether restoring it conflicts with any future business rule.
+- Transfers are all-or-future from the effective month; there is no partial-month, split-store, or selected-month transfer.
+- A transfer is blocked if any future assignment exists after `currentMonth`; there is no edit/cancel flow for planned transfers.
+- Close/unlock history is stored per month-store record, but there is no global operation log or undo stack.
+- Batch close, batch transfer, and batch config propagation are not implemented.
 
-### Integration Points
+## Future Directions
 
-- **App.jsx**: Calls all operations in response to user actions (create store, transfer, close/unlock).
-- **payrollLogic.js**: Relies on workspace operations to produce the store/assignment/monthlyRecords state that payroll queries then read.
-- **payrollData.js**: Uses `createOpenMonthlyStoreRecord()` for defensive normalization of records accessed during transfer and close/unlock.
-
-### Current Limitations
-
-- Employee transfers move all existing row data from all affected months; there is no selective or partial transfer.
-- Transfer creates one new assignment; it does not support splitting an employee across multiple stores in the same month.
-- Archive validation only checks active-employee assignments; resigned employees with historical assignments are not blocked.
-- Close/unlock events use opaque `eventId` strings; there is no UUID generation or collision prevention in the operation itself.
-- Transfer validation iterates all affected months' records synchronously; large monthly histories may impact performance.
-- No undo/redo capability for any operation.
-
-### Future Directions
-
-- Support partial employee transfers (select specific months to move).
-- Add operation-level UUID generation for event IDs.
-- Support batch close for all stores in a month.
-- Add undo/redo stack for workspace operations.
-- Add transfer preview (dry-run) that shows affected months and data without committing.
-- Add store config change propagation: bulk-update config across stores sharing a source config.
+- Move resignation, salary adjustment, and store config updates into this operation layer.
+- Add dry-run preview functions for archive, transfer, close, unlock, and restore.
+- Add operation IDs and collision-safe ID generation or validation.
+- Add batch close for all eligible stores in a month.
+- Add planned transfer edit/cancel operations.
+- Add global operation history for audit and optional undo.

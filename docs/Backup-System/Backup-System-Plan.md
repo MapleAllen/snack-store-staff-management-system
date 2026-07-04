@@ -1,102 +1,145 @@
-# Backup-System - Plan
+# Backup-System Plan
 
 ## Objective
 
-Provide a reliable, verifiable, and user-controlled backup system where every recovery point is integrity-checked, retention is predictable, backups are portable, and protected backups offer meaningful confidentiality without hidden data-loss risks.
+Provide a reliable, verifiable, and user-controlled backup system where every backup can be validated before restore, recovery points are understandable, protected backups offer meaningful confidentiality, and commercial support can diagnose backup state without exposing payroll data publicly.
 
 ## Design Principles
 
-- **Shared format, single source of truth**: The backup envelope format is defined once in `shared/backup-format.js` and consumed by every layer.
-- **Validation at every boundary**: Backup data is validated on create, list, read, and import.
-- **Atomic writes, never partial**: Every backup file is written via temp-file + rename.
-- **Damaged backups are discoverable**: Damaged files must not silently disappear; the user must know what failed and why.
-- **Encryption is opt-in, not opt-out**: Protected backups are an explicit user choice; plaintext remains the default for backward compatibility.
-- **Retention is explicit and predictable**: Users must be able to understand why a backup was kept or removed.
+- The backup envelope is defined once in `shared/backup-format.js`.
+- Imports are validated before workspace state is replaced.
+- Recovery points are local safeguards, not a substitute for off-device backup.
+- Protected backups are explicit user choices and must not hide passphrase-loss risk.
+- Backup writes are atomic and must not delete older backups before the new backup succeeds.
+- Backup status must be explainable to non-technical store owners.
+- Legacy backup compatibility remains unless a migration policy explicitly ends support.
 
-## Phases
+## Phase 1: Shared Format and Automatic Recovery Points — DONE
 
-### Phase 1: Shared Format and Basic Auto Backups — DONE
+Status: **Done**
 
-Completed work:
-- Canonical backup envelope with type, version, storageKey, exportedAt, reason, protected, and data fields: `shared/backup-format.js:1-20`.
-- Five reason constants with Chinese labels: `shared/backup-format.js:6-20`.
-- Structural validation of backup payloads and embedded workspace data: `shared/backup-format.js:26-54`.
-- Auto recovery points with daily startup dedup and 10-file retention: `backup-store.cjs:54-76`.
-- Atomic file writes and damaged file handling: `backup-store.cjs:47-49,69-72`.
+Goals:
 
-### Phase 2: Protected Backups — DONE
+- Establish a single backup envelope and desktop automatic recovery point store.
 
 Completed work:
-- Manual passphrase-protected backup export with PBKDF2 + AES-256-GCM via WebCrypto: `App.jsx:68-112`.
-- Protected backup import with correct-passphrase restore and wrong-passphrase safe rejection.
-- `protected: boolean` flag in backup envelope to distinguish plaintext vs encrypted.
 
-### Phase 3: Backup Integrity and Discovery — NOT STARTED
+- `shared/backup-format.js` defines current and legacy backup identifiers, `STORAGE_KEY`, size limit, reason constants, labels, and validation helpers.
+- `electron/backup-store.cjs` creates, lists, reads, deduplicates, and retains automatic recovery points.
+- Electron IPC exposes create/list/read backup APIs through `window.payrollDesktop`.
+- Automatic backup triggers exist for daily startup, before restore, after month close, and before demo reset.
 
-Goal: Add SHA256 checksums and surface damaged backup information to the user.
+## Phase 2: Protected Manual Backups — DONE
 
-Tasks:
-- Add `checksum` field (SHA256 of JSON-serialized data) to the backup envelope.
-- Validate checksum on every read/list/import operation.
-- Surface damaged backups in list results with error reason instead of silently excluding them.
-- Add a "verify backup" action that checks integrity without loading into workspace.
-- Add backup size warnings for approaching the 25 MB import limit.
+Status: **Done**
 
-### Phase 4: Retention Policy and Management — NOT STARTED
+Goals:
 
-Goal: Allow configurable retention and provide backup management controls.
-
-Tasks:
-- Add configurable retention: by max count, max age (days), and per-reason quotas.
-- Add backup metadata export: list all backups with dates, reasons, sizes, checksums.
-- Add bulk backup deletion with confirmation.
-- Add backup size tracking and storage quota awareness.
-- Add backup import dry-run: validate format and structure without applying to workspace.
-
-### Phase 5: Backup Comparison and Diff — NOT STARTED
-
-Goal: Help users understand what changed between two recovery points.
-
-Tasks:
-- Add `diffBackups(backup1, backup2)` returning structural differences: stores added/removed, employee count change, payroll data changes.
-- Surface diff in the recovery point list UI.
-- Add time-range filtering for backup lists (last 7 days, last month, etc.).
-
-### Phase 6: Backup Export Formats — NOT STARTED
-
-Goal: Support non-JSON backup formats for external tooling and archival.
-
-Tasks:
-- Add CSV export of backup metadata and row-level payroll data.
-- Add ZIP-compressed backup bundles for size reduction.
-- Add backup export verification: re-import exported backup into a temporary workspace to confirm round-trip integrity.
-
-### Phase 7: Testing Strategy — PARTIALLY COMPLETED
+- Let users export backups that require a passphrase to restore.
 
 Completed work:
-- `backupFormat.test.js` — 3 tests: current/legacy format, malformed, oversized.
-- `backupStore.test.js` — 3 tests: daily dedup, invalid/damaged, legacy v1.
-- `backupReason.test.js` — 3 tests: 5 reason constants, labels, before-demo-reset validation.
 
-Remaining tasks:
-- Add tests for protected backup export/import round-trip.
-- Add tests for wrong-passphrase safe failure without workspace pollution.
-- Add tests for retention policy enforcement (maxBackups limit).
-- Add tests for daily startup dedup across same-day creates.
-- Add tests for backup store concurrent create serialization.
-- Add tests for backup integrity checksum validation.
+- Manual plaintext JSON export exists.
+- Manual protected export encrypts the plaintext backup payload with WebCrypto PBKDF2 and AES-GCM.
+- Protected import decrypts with the provided passphrase and validates the decrypted payload before restore.
+- Wrong passphrases are rejected without replacing the current workspace.
+
+## Phase 3: Backup Integrity and Visibility — NOT STARTED
+
+Status: **Not Started**
+
+Goals:
+
+- Detect damaged backups and show users which recovery points are usable.
+
+Remaining features:
+
+- Add SHA256 checksum metadata to plaintext backup envelopes.
+- Validate checksum on create, list, read, import, and workspace-store load where applicable.
+- Return damaged backup metadata from `list()` with error reason instead of silently excluding damaged files.
+- Add a settings action to verify a backup without restoring it.
+- Add tests for checksum mismatch, damaged list entries, and verify-only behavior.
+
+## Phase 4: Restore Preview and Backup Diff — NOT STARTED
+
+Status: **Not Started**
+
+Goals:
+
+- Help users understand what will change before replacing their workspace.
+
+Remaining features:
+
+- Add backup import dry-run that reports app version, store count, employee count, latest month, and close status counts.
+- Add diff between current workspace and backup: stores added/removed, employees added/removed, closed months changed, and payroll records present.
+- Show diff in restore confirmation modal.
+- Add tests for restore preview and diff output.
+
+## Phase 5: Retention and Backup Management — NOT STARTED
+
+Status: **Not Started**
+
+Goals:
+
+- Give commercial users predictable recovery point retention and cleanup controls.
+
+Remaining features:
+
+- Add configurable retention by max count, max age, and per-reason minimums.
+- Add manual deletion of selected recovery points with confirmation.
+- Add backup metadata export for support review.
+- Add storage usage display for recovery points.
+- Add retention policy tests.
+
+## Phase 6: Protected Automatic Backups — NOT STARTED
+
+Status: **Not Started**
+
+Goals:
+
+- Reduce plaintext backup exposure for users who opt into stronger local confidentiality.
+
+Remaining features:
+
+- Decide whether automatic backups share workspace encryption, backup passphrase, or remain plaintext.
+- Add encrypted automatic recovery point support only after lost-passphrase behavior is documented.
+- Add UI warnings explaining that encrypted local backups still need off-device copies.
+- Add restore tests for encrypted automatic recovery points.
+
+## Phase 7: Testing Strategy — PARTIALLY COMPLETED
+
+Status: **Partially Completed**
+
+Goals:
+
+- Keep backup compatibility and recovery behavior safe across releases.
+
+Completed work:
+
+- `src/backupFormat.test.js` covers current/legacy type acceptance, malformed payload rejection, and oversized file rejection.
+- `src/backupStore.test.js` covers daily deduplication, retention, invalid read ID rejection, and legacy backup acceptance.
+- `src/backupReason.test.js` covers reason constants, labels, and validation with `before-demo-reset`.
+
+Remaining features:
+
+- Add protected backup export/import round-trip tests.
+- Add wrong-passphrase safe-failure tests.
+- Add damaged backup list visibility tests.
+- Add checksum tests once checksums exist.
+- Add restore-preview and diff tests.
 
 ## Implementation Rules
 
-- Do not change the backup envelope format without a version bump and backward-compatible read support.
-- Do not add encryption that makes it impossible to recover data if the passphrase is lost.
-- Do not remove legacy backup type support (`LEGACY_BACKUP_TYPES`) without confirming that all old backup files can still be imported.
-- Do not delete auto backup files during create without first verifying the create succeeded.
-- Do not surface the backup passphrase or derived key in logs, errors, or UI state.
+- Do not restore a backup before validating type, storage key, size, and workspace structure.
+- Do not delete old automatic backups unless the new backup was successfully written and validated.
+- Do not log backup passphrases, derived keys, or decrypted payloads.
+- Do not imply local recovery points are off-device backups.
+- Do not remove legacy backup type support without a documented migration and support decision.
+- Do not encrypt automatic backups without defining how users recover from lost credentials.
 
 ## Open Questions
 
-- Should auto recovery points also support optional encryption, or should encryption remain manual-only?
-- Should the retention policy be user-configurable in Settings, or remain fixed at 10?
-- Should backup verification produce a machine-readable report for integration into release/audit processes?
-- Should the backup system support scheduled exports to a user-specified external directory?
+- Should automatic recovery points remain plaintext until workspace encryption exists?
+- Should checksum metadata be added to workspace files and backup files in one shared format change?
+- Should backup retention settings be visible in the first commercial release or remain an advanced setting?
+- Should support tooling consume a redacted backup metadata export?

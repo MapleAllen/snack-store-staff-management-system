@@ -1,4 +1,4 @@
-# Payroll-Logic - Description
+# Payroll-Logic Module Description
 
 ## Module Name
 
@@ -6,112 +6,128 @@ Payroll-Logic
 
 ## Purpose
 
-Implements the payroll calculation engine, input validation, employee-store assignment queries, payroll row construction, stage summary computation, and CSV/export formatting for the payroll system.
+Payroll-Logic implements the deterministic payroll calculation and review layer for 门店工资助手. It converts workspace data into per-employee payroll rows, validates input, separates estimated/confirmed/closed totals, identifies month-close blockers, and produces safe export rows for payroll handoff.
 
 ## Current Implementation
 
+The module is implemented in `src/payrollLogic.js` as a collection of pure functions. It does not store state and does not mutate the workspace. UI components call these functions after `App.jsx` changes workspace state through local React state and workspace operations.
+
 ### Capabilities
 
-**Core calculation**
-- `calculatePayroll(employee, entry, config)` computes a full salary breakdown for one employee-month-store combination.
-- Computes: overtime pay, leave deductions (days + hours), night shift pay, attendance bonus, audit bonus, social insurance, meal allowance, special adjustment, and net salary.
-- Uses `round2()` for consistent two-decimal rounding throughout.
-- Leave deduction divisors, month days divisor, and night shift rate come from store config.
-- Night shift pay and meal allowance are only meaningful when config divisors are > 0.
+**Calculation engine**
 
-**Input validation**
-- `validateStoreConfig(config)`: checks non-negative constraints (socialInsuranceBase, mealAllowanceBase, auditPassedBonus, auditFallbackBonus, nightShiftRate) and positive constraints (leaveDaysDivisor, leaveHoursDivisor, monthDays).
-- `validateEmployeeSalary(employee)`: checks salaryConfigured, positive baseSalary, non-negative overtimeRate and attendanceBonus.
-- `validatePayrollEntry(entry, config)`: validates numeric fields, range constraints (leaveDays <= monthDays, leaveHours <= leaveHoursDivisor), and special adjustment format.
+- `calculatePayroll(employee, entry, config)` computes a flat breakdown for one employee in one store-month.
+- `calculatePayrollDetailed(employee, entry, config)` returns the same flat `breakdown` plus calculation `steps` with source fields, formula text, raw values, rounded amounts, and rounding metadata.
+- Computes overtime pay, leave-day deduction, leave-hour deduction, night shift pay, attendance bonus, audit pay, fixed social insurance contribution, prorated meal allowance, special adjustment, and net salary.
+- Treats social insurance as fixed from `config.socialInsuranceBase`; it is not prorated by leave.
+- Prorates meal allowance from `config.mealAllowanceBase` by leave days and `config.monthDays`.
+- Grants attendance bonus only when both leave days and leave hours are zero.
+- Uses `auditPassedBonus` when `entry.auditPassed` is true and `auditFallbackBonus` otherwise.
+- Uses `round2(value)` for two-decimal monetary rounding.
+- Defines `PAYROLL_FORMULA_METADATA` for the current flat store-month payroll formula: `core-payroll-v1`, `flat-store-month-payroll`, `round2`, and fixed social insurance contribution.
 
-**Employee-store assignment queries**
-- `isAssignmentActive(assignment, month)`: checks month falls within assignment start/end range.
-- `getAssignmentAtMonth(workspace, employeeId, month)`: finds active assignment for given month.
-- `getEmployeeAssignments(workspace, employeeId)`: all assignments for an employee, sorted by startMonth.
-- `getEmployeesForStore(workspace, storeId, month, options)`: active employees at a store for a month; supports `includeResigned` flag.
-- `getEmployeesWithStoreHistory(workspace, storeId)`: all employees ever assigned to a store.
+**Validation**
 
-**Payroll row construction**
-- `getStorePayrollRows(workspace, month, store, options)`: returns per-employee rows with employee, entry, breakdown, validationIssues, and recordStatus.
-- For closed months: returns frozen snapshot rows directly.
-- For open months: computes live rows from stored entries and current employee/store config.
-- `cloneDefaultEntry(currentEntry)`: merges current entry over default blank entry.
-- `entryHasInput(entry)`: returns true if isComplete is truthy.
-- `entryHasDraftChanges(entry)`: returns true if any input fields have non-empty/truthy values but entry is not yet complete.
+- `validateStoreConfig(config)` enforces non-negative store parameters for allowances/bonuses/rates and positive divisors for leave and month days.
+- `validateEmployeeSalary(employee)` requires `salaryConfigured` and validates positive base salary, non-negative overtime rate, and non-negative attendance bonus.
+- `validatePayrollEntry(entry, config)` validates numeric payroll entry fields, prevents negative overtime/leave/night shift values, allows positive or negative special adjustments, and enforces leave upper bounds.
 
-**Payroll stage summary**
-- `getPayrollStageSummary(rows, monthlyStore)`: computes forecastTotal, confirmedTotal, closedTotal, employee counts by status (confirmed, pending, unconfigured, invalid, review, draft, notStarted).
-- Distinguishes three total stages: forecast, confirmed, and closed.
+**Assignment and employee queries**
 
-**Status and blocker classification**
-- `getPayrollReviewStatus(row)`: returns `{ tone, label, summary }` for UI badges — danger (input error), warning (salary pending / needs review), success (confirmed / closed), idle (pending confirmation).
-- `getPayrollCloseBlockers(row)`: lists blocking reasons preventing month close: salary not configured, validation errors, not yet confirmed.
-- `getPayrollIssueItems(row)`: surfaces notable entries: leave days/hours, special adjustments, audit not passed.
-- `getPayrollChangeItems(row, storeConfig)`: lists changes from defaults: overtime, leave, night shift, special adjustment, audit pass.
+- `isAssignmentActive(assignment, month)` checks whether a month falls within assignment bounds.
+- `getAssignmentAtMonth(workspace, employeeId, month)` returns the employee assignment active in a month.
+- `getEmployeeAssignments(workspace, employeeId)` returns assignment history sorted by `startMonth`.
+- `getEmployeesForStore(workspace, storeId, month, options)` returns employees assigned to a store-month, excluding resigned employees unless `includeResigned` is true.
+- `getEmployeesWithStoreHistory(workspace, storeId)` returns all employees ever assigned to a store.
 
-**Export and formatting**
-- `buildExportRows(store, rows, exportStatus)`: flattens payroll rows into Chinese-labeled CSV-ready objects with 工资表状态, 门店, 姓名, 基础工资, etc.
-- `csvEscape(value)`: escapes CSV special characters and formula injection prefixes.
-- `sanitizeDownloadFileName(value, fallback)`: removes invalid filename characters for cross-platform download safety.
-- `formatCurrency(value)`: zh-CN CNY formatting with 2 decimal places.
-- `formatTimestamp(value)`: zh-CN short datetime formatting.
-- `previousMonth(month)`: returns YYYY-MM of previous month.
-- `toNumber(value)`, `round2(value)`: numeric conversion utilities.
+**Payroll rows and monthly records**
+
+- `getMonthlyStoreRecord(workspace, month, storeId)` returns a normalized month-store record using `createOpenMonthlyStoreRecord()`.
+- `getStorePayrollRows(workspace, month, store, options)` returns rows containing `employee`, `entry`, `breakdown`, `calculationTrace`, `validationIssues`, and `recordStatus` for open months.
+- Closed months with a stored `snapshot` return frozen snapshot rows and do not recalculate from live employee or store config.
+- Closed snapshot rows preserve stored `calculationTrace` when it exists; older snapshot rows without trace remain valid and do not get recalculated from live data.
+- Closed snapshot rows preserve stored `formulaMetadata` when it exists; older snapshot rows without formula metadata remain valid and are not backfilled from live formula constants.
+- Open months calculate rows from current employees, current store config, and saved monthly entries.
+
+**Stage summary and review status**
+
+- `getPayrollStageSummary(rows, monthlyStore)` computes forecast, confirmed, and closed totals and counts for confirmed, pending, unconfigured, invalid, review, draft, and not-started rows.
+- `getPayrollCloseBlockers(row)` returns reasons that prevent closing: unconfigured salary, validation errors, or missing explicit employee confirmation.
+- `getPayrollIssueItems(row)` identifies non-blocking review items such as leave, special adjustments, and audit fallback.
+- `getPayrollChangeItems(row, storeConfig)` lists notable changes for the owner review panel.
+- `getPayrollReviewStatus(row)` converts row state into UI badge data with `tone`, `label`, and `summary`.
+
+**Exports and formatting**
+
+- `buildExportRows(store, rows, exportStatus)` creates Chinese-labeled CSV-ready objects and includes validation status per row.
+- Invalid rows export an empty `实发工资` value and carry joined validation issues in `数据校验`.
+- `csvEscape(value)` escapes CSV text and neutralizes spreadsheet formula prefixes (`=`, `+`, `-`, `@`, tab, carriage return) for string values.
+- `sanitizeDownloadFileName(value, fallback)` removes unsafe filename characters and trims trailing spaces/dots.
+- `formatCurrency(value)` formats CNY amounts with two decimals.
+- `formatTimestamp(value)` formats short Chinese timestamps or returns `未保存` for missing values.
 
 **Draft helpers**
-- `createEmployeeDraft(employee)`: provides default string values for employee creation form fields.
-- `createAdjustmentDraft(employee)`: provides default adjustment record with today's date and current salary values.
 
-### Architecture
+- `cloneDefaultEntry(currentEntry)` overlays stored row data on top of default blank monthly entry fields.
+- `entryHasInput(entry)` treats `isComplete` as the confirmation signal.
+- `entryHasDraftChanges(entry)` detects unconfirmed rows with edited values, notes, or audit state.
+- `createEmployeeDraft(employee)` and `createAdjustmentDraft(employee)` prepare form drafts for UI modals.
 
-| File | Role |
-|---|---|
-| `src/payrollLogic.js` | Single-file module containing all payroll calculation, validation, row construction, summary, export, and formatting functions. |
+## Architecture
 
-**Key exports**
+Payroll-Logic is a pure business-logic module. It consumes workspace-shaped objects and returns derived values for pages, reports, and exports.
 
-| Export | Type | Description |
-|---|---|---|
-| `calculatePayroll(emp, entry, config)` | function | Full salary breakdown |
-| `validateStoreConfig(config)` | function | Config constraint validation |
-| `validateEmployeeSalary(emp)` | function | Salary setup validation |
-| `validatePayrollEntry(entry, config)` | function | Entry numeric/range validation |
-| `getEmployeesForStore(ws, storeId, month, opts)` | function | Active employees query |
-| `getStorePayrollRows(ws, month, store, opts)` | function | Payroll row array |
-| `getPayrollStageSummary(rows, monthlyStore)` | function | Stage totals and counts |
-| `getPayrollReviewStatus(row)` | function | UI review status badge |
-| `getPayrollCloseBlockers(row)` | function | Month-close blocking reasons |
-| `getPayrollIssueItems(row)` | function | Notable entry items |
-| `getMonthlyStoreRecord(ws, month, storeId)` | function | Normalized month record |
-| `buildExportRows(store, rows, status)` | function | Export-ready row array |
-| `csvEscape(value)` | function | CSV safe string |
-| `sanitizeDownloadFileName(value, fb)` | function | Safe filename |
-| `formatCurrency(value)` | function | CNY formatter |
-| `entryHasInput(entry)` | function | Completion check |
-| `createAdjustmentDraft(emp)` | function | Adjustment form defaults |
+### Business Logic (`src/payrollLogic.js`)
 
-### Integration Points
+- `calculatePayroll(employee, entry, config)`
+  - Produces the payroll breakdown used by payroll, attendance, reports, and export views.
+- `calculatePayrollDetailed(employee, entry, config)`
+  - Produces the same payroll breakdown plus trace steps used by the payroll employee detail panel.
+- `PAYROLL_FORMULA_METADATA` and `clonePayrollFormulaMetadata()`
+  - Provide stable formula version metadata for newly closed snapshot rows.
+- `validateStoreConfig(config)`, `validateEmployeeSalary(employee)`, `validatePayrollEntry(entry, config)`
+  - Produce human-readable validation issue strings.
+- `getStorePayrollRows(workspace, month, store, options)`
+  - Central row constructor; handles closed snapshot vs open live calculation.
+- `getPayrollStageSummary(rows, monthlyStore)`
+  - Central aggregate for overview, payroll, and reports.
+- `getPayrollCloseBlockers(row)` and `getPayrollIssueItems(row)`
+  - Owner-first status classification.
+- `buildExportRows(store, rows, exportStatus)`
+  - Converts derived rows into export objects.
 
-- **payrollData.js**: Imports `createOpenMonthlyStoreRecord`, `defaultMonthlyEntry` for monthly record handling and entry cloning.
-- **workspaceOperations.js**: Called by store-month close to validate rows before freezing; `getMonthlyStoreRecord()` used for reading source records during transfers.
-- **App.jsx / pages**: Primary consumer — calls row computation, summary, review status, blockers, export, and validation for UI rendering.
-- **Settings / Backup flows**: Uses `buildExportRows()` and `csvEscape()` for CSV export; `sanitizeDownloadFileName()` for download naming.
+## Integration Points
 
-### Current Limitations
+- `src/payrollData.js`
+  - Provides `createOpenMonthlyStoreRecord()` and `defaultMonthlyEntry()`.
+- `src/workspaceOperations.js`
+  - Uses `getAssignmentAtMonth()`, `getMonthlyStoreRecord()`, and `previousMonth()` during employee transfer and month operations.
+- `src/App.jsx`
+  - Computes active store employees, payroll rows, selected row, totals, completion rate, exceptions, CSV export, and modal defaults.
+- `src/pages/HomePage.jsx`
+  - Uses summaries, blockers, and issue items for the owner command center.
+- `src/pages/PayrollPage.jsx`
+  - Uses review status, blockers, issue items, change items, formatting, and draft helpers.
+- `src/pages/AttendancePage.jsx`
+  - Uses computed row breakdowns passed by `App.jsx` for attendance totals.
+- `src/pages/ReportsPage.jsx`
+  - Uses summaries, blockers, issue items, and row breakdowns for monthly reports.
 
-- Calculation is purely front-end synchronous; no server-side re-computation or multi-pass validation.
-- Leave deduction uses linear proportional formula; does not support tiered or capped leave policies.
-- Social insurance base is a flat config value, not prorated by leave or partial-month employment.
-- Audit bonus is binary (passed/not) without support for graded audit scores.
-- Export rows embed validation issues as joined Chinese strings; downstream consumers must parse them from CSV text.
-- `entryHasInput` treats `isComplete` as the sole signal; incomplete entries with data are detected separately by `entryHasDraftChanges`.
-- No lazy/incremental recalculation; every row update recomputes the full row array.
+## Current Limitations
 
-### Future Directions
+- Payroll calculation is a fixed `core-payroll-v1` formula; there is no per-store formula plug-in, tax calculation, statutory minimum wage guard, or configurable overtime tiers.
+- Employee salary components are current values only; there is no automatic effective-date lookup for historical salary changes beyond frozen closed snapshots.
+- Export is CSV-only from the UI; there is no structured JSON, XLSX, PDF, multi-store export package, or export manifest.
+- Validation issue strings are human-readable Chinese text, not machine-readable error codes.
+- `entryHasInput()` intentionally maps to explicit confirmation only, so entered-but-unconfirmed rows require separate handling through `entryHasDraftChanges()`.
+- Open-month rows are recalculated from current config and employee fields, so only closed snapshots provide historical immutability.
+- The module has no incremental memoization; pages recalculate row arrays in render flow.
+- Older closed snapshots created before trace and formula metadata storage do not have source fields, formula text, rounding metadata, or formula version metadata; they still display frozen payroll amounts.
 
-- Add parameterized calculation with pluggable deduction/allowance formula functions.
-- Add export format extensibility (JSON, XLSX, structured PDF) beyond CSV.
-- Add filtered row subsets (only confirmed, only invalid, only draft) for targeted review.
-- Add per-employee history view showing payroll breakdown changes month-over-month.
-- Add overtime-rate tiers, progressive leave deduction caps.
-- Add localization support for currency formatting beyond CNY.
+## Future Directions
+
+- Use formula version metadata in future export manifests, snapshot hashes, and formula migration decisions.
+- Add machine-readable validation issue codes while preserving Chinese user-facing messages.
+- Add structured export formats with metadata, status, workspace version, and snapshot hash.
+- Add commercial payroll components such as categorized bonuses, deductions, reimbursements, and tax placeholders.
+- Add effective-date salary lookup for open historical months that are not closed.
