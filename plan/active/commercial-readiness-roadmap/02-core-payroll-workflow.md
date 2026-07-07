@@ -24,6 +24,7 @@ Status: IN PROGRESS
 - `src/payrollLogic.test.js`
 - `src/workspaceOperations.test.js`
 - Related docs under `docs/Payroll-Logic/`, `docs/Payroll-Management/`, `docs/Overview-Dashboard/`
+- Related docs under `docs/Reports-And-Exports/` when export handoff work updates report/export facts.
 
 ## Do Not Modify Without Re-Planning
 
@@ -36,15 +37,17 @@ Status: IN PROGRESS
 - Add calculation trace output for each payroll row.
 - Add formula version metadata to closed snapshots. Status: DONE for newly closed snapshot rows; legacy closed snapshots remain unchanged.
 - Add machine-readable validation issues while preserving Chinese UI messages.
+- Add close confirmation summary grouped by blockers, review-only exceptions, and clean rows. Status: DONE.
 - Add structured payroll adjustment categories beyond the current free numeric special adjustment.
 - Add attendance import preview and validation report.
 - Add batch close readiness from the overview without bypassing per-store blockers.
-- Add export metadata handoff points for Phase 4.
+- Add export metadata handoff points for Phase 4. Status: DONE.
 
 ## Acceptance Criteria
 
 - Every displayed salary total can be traced to source fields and formula steps.
 - Close blockers are structured by code, severity, field, and message.
+- Export metadata exposes draft/formal status, row/review counts, estimated/confirmed/closed totals, and formula version summary without changing CSV output.
 - Existing closed snapshots remain stable after formula trace work.
 - Payroll edits still clear employee confirmation unless explicitly confirming.
 - Tests cover trace parity, validation issue codes, structured adjustments, and batch close blockers.

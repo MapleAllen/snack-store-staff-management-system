@@ -26,12 +26,13 @@ Completed work:
 - Payroll and attendance pages share monthly row data.
 - Per-employee confirmation exists and is required before close.
 - Close blockers cover salary-pending rows, validation issues, and unconfirmed rows.
+- Close blockers and validation issues carry stable `code`, `severity`, `field`, and Chinese `message` values.
 - Store-month close freezes snapshots and unlock requires a reason.
 - Draft/formal CSV export status is explicit.
 
-## Phase 2: Review Transparency — PARTIALLY COMPLETED
+## Phase 2: Review Transparency — DONE
 
-Status: **Partially Completed**
+Status: **Done**
 
 Goals:
 
@@ -43,23 +44,29 @@ Completed work:
 - Add source field labels for every deduction and addition.
 - Add rounding explanations for each monetary step.
 - Add formula version metadata to newly closed snapshot rows without changing frozen payroll amounts.
-
-Remaining features:
-
 - Add close confirmation summary grouped by blockers, review-only exceptions, and clean rows.
 
-## Phase 3: Structured Adjustments and Attendance Import — NOT STARTED
+## Phase 3: Structured Adjustments and Attendance Import — PARTIALLY COMPLETED
 
-Status: **Not Started**
+Status: **Partially Completed**
 
 Goals:
 
 - Replace free-form payroll exceptions with structured commercial workflows.
 
+Completed work:
+
+- Add payroll logic support for optional categorized one-time monthly adjustments with reason, amount, and approval status.
+- Preserve the existing free numeric special adjustment field while allowing future UI/import flows to pass structured records.
+- Add validation issues for pending or invalid structured adjustment records so they block close through the existing validation flow.
+- Add per-employee detail panel UI to add, edit, delete, and review structured one-time payroll adjustments.
+- Route structured adjustment edits through `patchMonthlyEntry()` so prior employee confirmation is cleared and the employee must be confirmed again.
+- Show pending or invalid structured adjustment records through the existing validation issue and close blocker messages.
+
 Remaining features:
 
-- Add categorized one-time payroll adjustments with reason, amount, and approval status.
 - Add attendance import preview for CSV or spreadsheet-like files.
+- Add bulk/import/export-manifest workflows for categorized one-time payroll adjustments.
 - Add duplicate employee and invalid date detection during import.
 - Add tests for import validation without applying changes.
 
@@ -78,13 +85,18 @@ Remaining features:
 - Add multi-store export package for closed months.
 - Add payment status tracking: not exported, exported, paid, corrected.
 
-## Phase 5: Payroll Audit Trail — NOT STARTED
+## Phase 5: Payroll Audit Trail — PARTIALLY COMPLETED
 
-Status: **Not Started**
+Status: **Partially Completed**
 
 Goals:
 
 - Make payroll changes traceable for commercial support and owner review.
+
+Completed work:
+
+- Add a logic-level export metadata handoff helper with store/month scope, draft/formal status, row counts, close-review counts, totals, generated time, and formula version summary.
+- Preserve the current CSV export behavior and closed snapshot semantics; metadata is not yet downloaded or persisted.
 
 Remaining features:
 
@@ -103,13 +115,18 @@ Goals:
 Completed work:
 
 - Existing tests cover validation, stage totals, close blockers, closed snapshots, and unlock.
+- Tests cover structured validation issues, structured close blockers, and Chinese export message compatibility.
+- Tests cover logic-level structured adjustment categories, pending/rejected behavior, invalid adjustment records, and legacy special adjustment compatibility.
+- Tests cover close confirmation summary grouping and blocker-free close readiness.
+- Tests cover draft/formal export metadata handoff, counts, totals, and closed snapshot source stability.
+- Manual UI verification covers structured adjustment add/edit/delete, confirmation clearing, approval status impact, pending blockers, rejected no-impact behavior, and mobile layout.
 
 Remaining features:
 
-- Add UI-adjacent tests for edit-clears-confirmation behavior.
+- Add automated UI-adjacent tests for edit-clears-confirmation behavior.
 - Add tests for batch close once implemented.
-- Add tests for structured adjustment categories.
-- Add export manifest tests.
+- Add UI-level tests for structured adjustment categories.
+- Add export manifest file/download tests once the metadata helper is connected to an export artifact.
 
 ## Implementation Rules
 

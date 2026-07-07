@@ -29,17 +29,23 @@ Completed work:
 - Payroll CSV export labels draft vs formal status.
 - CSV escaping protects against spreadsheet formula injection for string values.
 
-## Phase 2: Export Metadata and Manifest — NOT STARTED
+## Phase 2: Export Metadata and Manifest — PARTIALLY COMPLETED
 
-Status: **Not Started**
+Status: **Partially Completed**
 
 Goals:
 
 - Make exported files auditable and easier to support.
 
+Completed work:
+
+- Add `buildPayrollExportMetadata()` as a reusable handoff point for future reports/export audit flows.
+- Include store ID/name, month, draft/formal status, row count, confirmed count, blocker/review/clean counts, estimated/confirmed/closed totals, generated time, current formula metadata, row formula version counts, and missing row formula metadata count.
+- Keep CSV export format unchanged and defer JSON sidecar, hashes, and multi-store packages.
+
 Remaining features:
 
-- Add export metadata including app version, workspace version, store ID/name, month, generated time, export status, row count, and totals.
+- Add export metadata fields for app version and workspace version.
 - Add sidecar JSON manifest for CSV exports.
 - Add closed snapshot hash for formal exports.
 - Add tests that manifest totals match exported rows.
@@ -100,10 +106,11 @@ Goals:
 Completed work:
 
 - Existing tests cover `csvEscape()`, filename sanitization, export row validation behavior, and total stages.
+- Export metadata tests cover open draft metadata, closed formal metadata, counts, totals, formula version summary, and closed snapshot source stability.
 
 Remaining features:
 
-- Add tests for draft vs formal export filenames and metadata.
+- Add tests for draft vs formal export filenames once metadata is connected to downloadable files.
 - Add tests for multi-store export package contents.
 - Add tests for closed snapshot export immutability after config changes.
 - Add Windows Excel smoke checks for CJK CSV rendering during release validation.

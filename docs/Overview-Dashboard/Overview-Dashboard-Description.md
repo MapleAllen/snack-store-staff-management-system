@@ -29,7 +29,7 @@ The module is implemented in `src/pages/HomePage.jsx`. It receives `workspace`, 
 **Payroll confidence and blockers**
 
 - Shows pending employee count, ready-to-close store count, and review exception count.
-- Shows blocker reason summary grouped by blocker text.
+- Shows blocker reason summary grouped by each structured blocker issue's Chinese `message`.
 - Shows up to three priority employee blockers with store and employee names.
 
 **Store cards**
@@ -63,7 +63,9 @@ Overview-Dashboard is a pure page component that derives dashboard state from sh
 - `getPayrollStageSummary()`
   - Provides totals and counts.
 - `getPayrollCloseBlockers()`
-  - Identifies blocking rows.
+  - Identifies blocking rows with structured blocker issues.
+- `getPayrollIssueMessage()`
+  - Extracts the Chinese blocker message for dashboard display and grouping.
 - `getPayrollIssueItems()`
   - Identifies review-only exceptions.
 
