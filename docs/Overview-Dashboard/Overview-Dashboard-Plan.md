@@ -27,6 +27,7 @@ Completed work:
 - Recommended action priority exists.
 - Store cards show status, amount, confirmation, blockers, and review alerts.
 - Priority employee blockers route to payroll.
+- Structured payroll blockers are converted through their Chinese `message` for dashboard summaries.
 - Owner workflow guidance is displayed.
 
 ## Phase 2: Month Navigation and Context — NOT STARTED

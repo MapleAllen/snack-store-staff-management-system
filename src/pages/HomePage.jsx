@@ -4,6 +4,7 @@ import {
   formatCurrency,
   getMonthlyStoreRecord,
   getPayrollCloseBlockers,
+  getPayrollIssueMessage,
   getPayrollIssueItems,
   getPayrollStageSummary,
   getStorePayrollRows,
@@ -61,7 +62,7 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) 
       storeName: item.store.name,
       employeeId: row.employee.id,
       employeeName: row.employee.name,
-      reason: getPayrollCloseBlockers(row)[0],
+      reason: getPayrollIssueMessage(getPayrollCloseBlockers(row)[0]),
     })));
   const priorityEmployees = priorityRows.slice(0, 3);
   const blockerReasonSummary = Object.entries(priorityRows.reduce((summary, item) => {
@@ -194,7 +195,7 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) 
                     <div className="store-card__alerts">
                       {alertRows.map((row) => (
                         <span key={row.employee.id}>
-                          {row.employee.name}：{item.blockerRows.length > 0 ? getPayrollCloseBlockers(row)[0] : getPayrollIssueItems(row)[0]}
+                          {row.employee.name}：{item.blockerRows.length > 0 ? getPayrollIssueMessage(getPayrollCloseBlockers(row)[0]) : getPayrollIssueItems(row)[0]}
                         </span>
                       ))}
                     </div>

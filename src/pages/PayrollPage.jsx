@@ -9,6 +9,7 @@ import {
   entryHasInput,
   getPayrollCloseBlockers,
   getPayrollChangeItems,
+  getPayrollIssueMessage,
   getPayrollIssueItems,
   getPayrollReviewStatus,
 } from "../payrollLogic.js";
@@ -39,6 +40,7 @@ const TRACE_SOURCE_LABELS = {
   "entry.nightShiftHours": "本月夜班时长",
   "entry.auditPassed": "本月稽核状态",
   "entry.specialAdjustment": "本月特殊加减项",
+  "entry.payrollAdjustments": "结构化一次性工资调整",
   "config.leaveDaysDivisor": "门店请假天数除数",
   "config.leaveHoursDivisor": "门店请假小时除数",
   "config.monthDays": "门店每月计薪天数",
@@ -57,6 +59,51 @@ const TRACE_SOURCE_LABELS = {
   "breakdown.mealAllowance": "饭补结果",
   "breakdown.specialAdjustment": "特殊加减项结果",
 };
+
+const PAYROLL_ADJUSTMENT_CATEGORIES = [
+  { value: "bonus", label: "奖金" },
+  { value: "deduction", label: "扣款" },
+  { value: "reimbursement", label: "报销" },
+  { value: "correction", label: "修正" },
+];
+
+const PAYROLL_ADJUSTMENT_STATUSES = [
+  { value: "approved", label: "已批准" },
+  { value: "pending", label: "待审批" },
+  { value: "rejected", label: "已驳回" },
+];
+
+const DEFAULT_PAYROLL_ADJUSTMENT_DRAFT = {
+  category: "bonus",
+  amount: "",
+  reason: "",
+  status: "pending",
+};
+
+function issueMessage(issue) {
+  return getPayrollIssueMessage(issue);
+}
+
+function makePayrollAdjustmentId() {
+  const value = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `payroll-adjustment-${value}`;
+}
+
+function getPayrollAdjustments(entry) {
+  return Array.isArray(entry?.payrollAdjustments) ? entry.payrollAdjustments : [];
+}
+
+function getOptionLabel(options, value) {
+  return options.find((option) => option.value === value)?.label ?? value;
+}
+
+function getAdjustmentImpact(adjustment) {
+  if (adjustment?.status !== "approved") return 0;
+  const amount = Number(adjustment.amount);
+  if (!Number.isFinite(amount)) return 0;
+  if (adjustment.category === "deduction") return -amount;
+  return amount;
+}
 
 function formatTraceValue(value) {
   if (typeof value === "boolean") return value ? "是" : "否";
@@ -100,6 +147,8 @@ export function PayrollPage({
   const [activeView, setActiveView] = useState("payroll");
   const [searchTerm, setSearchTerm] = useState("");
   const [payrollFilter, setPayrollFilter] = useState("all");
+  const [adjustmentDraft, setAdjustmentDraft] = useState(DEFAULT_PAYROLL_ADJUSTMENT_DRAFT);
+  const [adjustmentDraftError, setAdjustmentDraftError] = useState("");
 
   const reviewedRows = payrollRows.map((row) => ({
     ...row,
@@ -127,9 +176,14 @@ export function PayrollPage({
   const invalidRows = reviewedRows.filter((row) => row.validationIssues.length > 0 && row.employee.salaryConfigured);
   const blockerRows = reviewedRows.filter((row) => row.closeBlockers.length > 0);
   const topPriorityBlockers = blockerRows.slice(0, 3);
-  const draftRows = reviewedRows.filter((row) => !row.entry.isComplete && row.hasDraftChanges && row.closeBlockers.length === 1 && row.closeBlockers[0] === "已录入但还未确认完成");
+  const draftRows = reviewedRows.filter((row) => !row.entry.isComplete && row.hasDraftChanges && row.closeBlockers.length === 1 && issueMessage(row.closeBlockers[0]) === "已录入但还未确认完成");
   const untouchedRows = reviewedRows.filter((row) => !row.entry.isComplete && !row.hasDraftChanges && row.validationIssues.length === 0 && row.employee.salaryConfigured);
   const readyToClose = !isLocked && reviewedRows.length > 0 && blockerRows.length === 0;
+  const selectedPayrollAdjustments = getPayrollAdjustments(selectedReviewRow?.entry);
+  const selectedPayrollAdjustmentIssues = (selectedReviewRow?.validationIssues ?? [])
+    .filter((issue) => `${issue?.field ?? ""}`.startsWith("entry.payrollAdjustments"));
+  const approvedPayrollAdjustmentTotal = selectedPayrollAdjustments
+    .reduce((sum, adjustment) => sum + getAdjustmentImpact(adjustment), 0);
   const controlState = isLocked
     ? { tone: "success", title: "本月工资已冻结", description: "当前结果已经完成月结，如需修改请填写原因后解锁。", actionLabel: "申请解锁" }
     : blockerRows.length > 0
@@ -139,6 +193,56 @@ export function PayrollPage({
         : readyToClose
           ? { tone: "success", title: "当前可以直接月结", description: "所有员工都已确认完成，可以冻结本店本月工资。", actionLabel: "确认月结" }
           : { tone: "idle", title: "继续录入并逐个确认", description: "先完成录入和确认，再回到这里执行月结。", actionLabel: "继续录入" };
+
+  function updatePayrollAdjustmentDraft(patch) {
+    setAdjustmentDraft((current) => ({ ...current, ...patch }));
+    setAdjustmentDraftError("");
+  }
+
+  function addPayrollAdjustment() {
+    if (!selectedReviewRow) return;
+    const amount = `${adjustmentDraft.amount}`.trim();
+    const reason = adjustmentDraft.reason.trim();
+    if (!amount || !reason) {
+      setAdjustmentDraftError("请填写金额和原因后再添加。");
+      return;
+    }
+    if (!Number.isFinite(Number(amount))) {
+      setAdjustmentDraftError("调整金额必须是有效数字。");
+      return;
+    }
+
+    patchMonthlyEntry(selectedReviewRow.employee.id, {
+      payrollAdjustments: [
+        ...selectedPayrollAdjustments,
+        {
+          id: makePayrollAdjustmentId(),
+          category: adjustmentDraft.category,
+          amount,
+          reason,
+          status: adjustmentDraft.status,
+        },
+      ],
+    });
+    setAdjustmentDraft((current) => ({ ...current, amount: "", reason: "" }));
+    setAdjustmentDraftError("");
+  }
+
+  function patchPayrollAdjustment(index, patch) {
+    if (!selectedReviewRow) return;
+    patchMonthlyEntry(selectedReviewRow.employee.id, {
+      payrollAdjustments: selectedPayrollAdjustments.map((adjustment, adjustmentIndex) =>
+        adjustmentIndex === index ? { ...adjustment, ...patch } : adjustment,
+      ),
+    });
+  }
+
+  function deletePayrollAdjustment(index) {
+    if (!selectedReviewRow) return;
+    patchMonthlyEntry(selectedReviewRow.employee.id, {
+      payrollAdjustments: selectedPayrollAdjustments.filter((_, adjustmentIndex) => adjustmentIndex !== index),
+    });
+  }
 
   const visiblePayrollRows = reviewedRows.filter((row) => {
     const matchesSearch = row.employee.name.includes(searchTerm.trim());
@@ -264,7 +368,7 @@ export function PayrollPage({
                       onClick={() => setSelectedEmployeeId(row.employee.id)}
                     >
                       <strong>{row.employee.name}</strong>
-                      <span>{row.closeBlockers[0]}</span>
+                      <span>{issueMessage(row.closeBlockers[0])}</span>
                     </button>
                   ))
                 ) : (
@@ -336,7 +440,7 @@ export function PayrollPage({
                           <strong>{row.employee.name}</strong>
                           <span>{formatCurrency(row.employee.baseSalary)}</span>
                           <span className={`status-badge status-badge--${row.reviewStatus.tone}`}>{row.reviewStatus.label}</span>
-                          <span className={row.closeBlockers.length > 0 ? "row-issue-label" : ""}>{row.closeBlockers[0] ?? row.issueItems[0] ?? "确认后才能计入月结"}</span>
+                          <span className={row.closeBlockers.length > 0 ? "row-issue-label" : ""}>{issueMessage(row.closeBlockers[0]) || row.issueItems[0] || "确认后才能计入月结"}</span>
                         </div>
                       </td>
                       <td className="col-static">{row.employee.baseSalary}</td>
@@ -420,7 +524,7 @@ export function PayrollPage({
                             className={row.entry.isComplete ? "completion-button completion-button--strong is-complete" : "completion-button completion-button--strong"}
                             type="button"
                             disabled={isLocked || (!row.entry.isComplete && row.validationIssues.length > 0) || !row.employee.salaryConfigured}
-                            title={row.validationIssues[0]}
+                            title={issueMessage(row.validationIssues[0])}
                             onClick={(event) => {
                               event.stopPropagation();
                               toggleEntryComplete(row.employee.id, !row.entry.isComplete);
@@ -428,7 +532,7 @@ export function PayrollPage({
                           >
                             {row.entry.isComplete ? "已确认完成" : "确认该员工完成"}
                           </button>
-                          <small>{row.entry.isComplete ? `确认时间 ${formatTimestamp(row.entry.completedAt)}` : row.closeBlockers[0] ?? "确认后该员工才算本月完成"}</small>
+                          <small>{row.entry.isComplete ? `确认时间 ${formatTimestamp(row.entry.completedAt)}` : issueMessage(row.closeBlockers[0]) || "确认后该员工才算本月完成"}</small>
                         </div>
                       </td>
                       <td className="currency-cell col-result">{row.employee.salaryConfigured ? formatCurrency(row.breakdown.netSalary) : "待设置"}</td>
@@ -463,7 +567,7 @@ export function PayrollPage({
                   </div>
                   {row.closeBlockers.length > 0 || row.issueItems.length > 0 ? (
                     <div className="issue-tags">
-                      {(row.closeBlockers.length > 0 ? row.closeBlockers : row.issueItems).map((item) => <span key={item}>{item}</span>)}
+                      {(row.closeBlockers.length > 0 ? row.closeBlockers.map(issueMessage) : row.issueItems).map((item) => <span key={item}>{item}</span>)}
                     </div>
                   ) : null}
                   <div className="mobile-entry-grid">
@@ -536,8 +640,8 @@ export function PayrollPage({
                   </button>
                   <div className="mobile-confirmation-card">
                     <strong>本员工确认</strong>
-                    <p>{row.entry.isComplete ? "这名员工本月已经确认完成。" : row.closeBlockers[0] ?? "确认后，该员工才会从月结阻塞里消失。"}</p>
-                    <button className={row.entry.isComplete ? "completion-button completion-button--strong is-complete" : "completion-button completion-button--strong"} type="button" disabled={isLocked || (!row.entry.isComplete && row.validationIssues.length > 0) || !row.employee.salaryConfigured} title={row.validationIssues[0]} onClick={() => toggleEntryComplete(row.employee.id, !row.entry.isComplete)}>{row.entry.isComplete ? "已确认完成" : "确认该员工完成"}</button>
+                    <p>{row.entry.isComplete ? "这名员工本月已经确认完成。" : issueMessage(row.closeBlockers[0]) || "确认后，该员工才会从月结阻塞里消失。"}</p>
+                    <button className={row.entry.isComplete ? "completion-button completion-button--strong is-complete" : "completion-button completion-button--strong"} type="button" disabled={isLocked || (!row.entry.isComplete && row.validationIssues.length > 0) || !row.employee.salaryConfigured} title={issueMessage(row.validationIssues[0])} onClick={() => toggleEntryComplete(row.employee.id, !row.entry.isComplete)}>{row.entry.isComplete ? "已确认完成" : "确认该员工完成"}</button>
                   </div>
                 </article>
               ))}
@@ -686,16 +790,16 @@ export function PayrollPage({
               </div>
               <div className="detail-card detail-card--confirmation">
                 <h3>当前员工确认动作</h3>
-                <p>{selectedReviewRow.entry.isComplete ? "当前已经确认完成；如果继续修改数据，系统会自动取消确认。" : selectedReviewRow.closeBlockers[0] ?? "点下确认后，这名员工才会从月结阻塞中移除。"}</p>
+                <p>{selectedReviewRow.entry.isComplete ? "当前已经确认完成；如果继续修改数据，系统会自动取消确认。" : issueMessage(selectedReviewRow.closeBlockers[0]) || "点下确认后，这名员工才会从月结阻塞中移除。"}</p>
                 <div className="detail-card__signal-list">
-                  <span>{selectedReviewRow.closeBlockers[0] ?? "当前没有月结阻塞"}</span>
+                  <span>{issueMessage(selectedReviewRow.closeBlockers[0]) || "当前没有月结阻塞"}</span>
                   <span>{selectedReviewRow.hasDraftChanges ? "本月已有录入变更。" : "本月没有录入变更，也需要手动确认一次。"}</span>
                 </div>
                 <button
                   className={selectedReviewRow.entry.isComplete ? "completion-button completion-button--strong is-complete" : "completion-button completion-button--strong"}
                   type="button"
                   disabled={isLocked || (!selectedReviewRow.entry.isComplete && selectedReviewRow.validationIssues.length > 0) || !selectedReviewRow.employee.salaryConfigured}
-                  title={selectedReviewRow.validationIssues[0]}
+                  title={issueMessage(selectedReviewRow.validationIssues[0])}
                   onClick={() => toggleEntryComplete(selectedReviewRow.employee.id, !selectedReviewRow.entry.isComplete)}
                 >
                   {selectedReviewRow.entry.isComplete ? "已确认完成，点此取消" : "确认该员工本月录入完成"}
@@ -729,6 +833,137 @@ export function PayrollPage({
                 <div>
                   <span>全勤奖金</span>
                   <strong>{formatCurrency(selectedReviewRow.employee.attendanceBonus)}</strong>
+                </div>
+              </div>
+
+              <div className="detail-card payroll-adjustments-card">
+                <div className="payroll-adjustments-card__head">
+                  <div>
+                    <h3>一次性工资调整</h3>
+                    <p>结构化记录会和上方自由数字调整一起计入特殊加减项；只有已批准记录影响实发。</p>
+                  </div>
+                  <strong>{formatCurrency(approvedPayrollAdjustmentTotal)}</strong>
+                </div>
+
+                <div className="payroll-adjustment-form">
+                  <label className="field">
+                    <span>分类</span>
+                    <select
+                      disabled={isLocked}
+                      value={adjustmentDraft.category}
+                      onChange={(event) => updatePayrollAdjustmentDraft({ category: event.target.value })}
+                    >
+                      {PAYROLL_ADJUSTMENT_CATEGORIES.map((category) => (
+                        <option key={category.value} value={category.value}>{category.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>状态</span>
+                    <select
+                      disabled={isLocked}
+                      value={adjustmentDraft.status}
+                      onChange={(event) => updatePayrollAdjustmentDraft({ status: event.target.value })}
+                    >
+                      {PAYROLL_ADJUSTMENT_STATUSES.map((status) => (
+                        <option key={status.value} value={status.value}>{status.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>金额</span>
+                    <input
+                      disabled={isLocked}
+                      type="number"
+                      step="10"
+                      value={adjustmentDraft.amount}
+                      onChange={(event) => updatePayrollAdjustmentDraft({ amount: event.target.value })}
+                    />
+                  </label>
+                  <label className="field payroll-adjustment-form__reason">
+                    <span>原因</span>
+                    <input
+                      disabled={isLocked}
+                      value={adjustmentDraft.reason}
+                      onChange={(event) => updatePayrollAdjustmentDraft({ reason: event.target.value })}
+                      placeholder="例如：盘点奖励、垫付报销、上月修正"
+                    />
+                  </label>
+                  <button className="secondary-button" type="button" disabled={isLocked} onClick={addPayrollAdjustment}>
+                    添加记录
+                  </button>
+                </div>
+                {adjustmentDraftError ? <p className="field-error">{adjustmentDraftError}</p> : null}
+
+                {selectedPayrollAdjustmentIssues.length > 0 ? (
+                  <div className="issue-tags payroll-adjustment-issues">
+                    {selectedPayrollAdjustmentIssues.map((issue) => (
+                      <span key={`${issue.field}-${issue.code}`}>{issueMessage(issue)}</span>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="payroll-adjustment-list">
+                  {selectedPayrollAdjustments.length === 0 ? (
+                    <p className="timeline__empty">当前员工本月还没有结构化调整记录。</p>
+                  ) : (
+                    selectedPayrollAdjustments.map((adjustment, index) => (
+                      <article className="payroll-adjustment-item" key={adjustment.id ?? index}>
+                        <div className="payroll-adjustment-item__summary">
+                          <strong>{getOptionLabel(PAYROLL_ADJUSTMENT_CATEGORIES, adjustment.category)}</strong>
+                          <span>{getOptionLabel(PAYROLL_ADJUSTMENT_STATUSES, adjustment.status)}</span>
+                          <em>{formatCurrency(getAdjustmentImpact(adjustment))}</em>
+                        </div>
+                        <div className="payroll-adjustment-item__fields">
+                          <label className="field">
+                            <span>分类</span>
+                            <select
+                              disabled={isLocked}
+                              value={adjustment.category ?? "bonus"}
+                              onChange={(event) => patchPayrollAdjustment(index, { category: event.target.value })}
+                            >
+                              {PAYROLL_ADJUSTMENT_CATEGORIES.map((category) => (
+                                <option key={category.value} value={category.value}>{category.label}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="field">
+                            <span>状态</span>
+                            <select
+                              disabled={isLocked}
+                              value={adjustment.status ?? "pending"}
+                              onChange={(event) => patchPayrollAdjustment(index, { status: event.target.value })}
+                            >
+                              {PAYROLL_ADJUSTMENT_STATUSES.map((status) => (
+                                <option key={status.value} value={status.value}>{status.label}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="field">
+                            <span>金额</span>
+                            <input
+                              disabled={isLocked}
+                              type="number"
+                              step="10"
+                              value={adjustment.amount ?? ""}
+                              onChange={(event) => patchPayrollAdjustment(index, { amount: event.target.value })}
+                            />
+                          </label>
+                          <label className="field payroll-adjustment-item__reason">
+                            <span>原因</span>
+                            <input
+                              disabled={isLocked}
+                              value={adjustment.reason ?? ""}
+                              onChange={(event) => patchPayrollAdjustment(index, { reason: event.target.value })}
+                            />
+                          </label>
+                          <button className="table-link" type="button" disabled={isLocked} onClick={() => deletePayrollAdjustment(index)}>
+                            删除
+                          </button>
+                        </div>
+                      </article>
+                    ))
+                  )}
                 </div>
               </div>
 

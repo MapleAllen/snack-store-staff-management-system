@@ -1405,6 +1405,107 @@ button {
   padding: 0.85rem 1rem;
 }
 
+.payroll-adjustments-card {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.payroll-adjustments-card__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.payroll-adjustments-card__head h3,
+.payroll-adjustments-card__head p {
+  margin: 0;
+}
+
+.payroll-adjustments-card__head p {
+  margin-top: 0.32rem;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.payroll-adjustments-card__head strong {
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.payroll-adjustment-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  align-items: end;
+}
+
+.payroll-adjustment-form__reason,
+.payroll-adjustment-item__reason {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.payroll-adjustment-issues {
+  padding: 0.72rem;
+  border: 1px solid rgba(168, 59, 50, 0.16);
+  border-radius: 8px;
+  background: #fff3f1;
+}
+
+.payroll-adjustment-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.payroll-adjustment-item {
+  display: grid;
+  gap: 0.72rem;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.92);
+}
+
+.payroll-adjustment-item__summary {
+  display: grid;
+  grid-template-columns: minmax(70px, auto) minmax(70px, auto) minmax(88px, 1fr);
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.payroll-adjustment-item__summary span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.payroll-adjustment-item__summary em {
+  justify-self: end;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-style: normal;
+  font-weight: 700;
+}
+
+.payroll-adjustment-item__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.58rem;
+  align-items: end;
+}
+
+.payroll-adjustment-form .secondary-button,
+.payroll-adjustment-item__fields .table-link {
+  min-height: 2.9rem;
+  white-space: nowrap;
+}
+
+.payroll-adjustment-form .secondary-button,
+.payroll-adjustment-item__fields .table-link {
+  grid-column: 1 / -1;
+}
+
 .formula-card h3,
 .detail-card h3 {
   margin: 0 0 0.85rem;
@@ -1939,8 +2040,34 @@ button {
   .command-center__digest,
   .confidence-card__grid,
   .confirmation-legend,
-  .mobile-entry-grid {
+  .mobile-entry-grid,
+  .payroll-adjustment-form,
+  .payroll-adjustment-item__fields,
+  .payroll-adjustment-item__summary {
     grid-template-columns: 1fr;
+  }
+
+  .payroll-adjustments-card__head {
+    display: grid;
+  }
+
+  .payroll-adjustment-item__summary em {
+    justify-self: start;
+  }
+
+  .formula-list dl div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .formula-list dt,
+  .formula-list dd {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .formula-list dd {
+    justify-self: start;
   }
 
   .exception-chip {

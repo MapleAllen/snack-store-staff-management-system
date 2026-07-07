@@ -24,30 +24,36 @@ The workflow is implemented across `src/App.jsx`, `src/pages/PayrollPage.jsx`, `
 **Payroll entry**
 
 - Supports overtime hours, leave days, leave hours, night shift hours when enabled, audit pass/fail, special adjustment, and note.
+- The current payroll UI keeps the legacy free numeric special adjustment field and also lets the employee detail panel add, edit, delete, and review structured one-time monthly adjustment records.
+- Structured payroll adjustment UI records support category, approval status, amount, and reason, and write to optional `entry.payrollAdjustments` data on the monthly row.
 - Shares row data with `AttendancePage.jsx`; edits on attendance and payroll pages update the same monthly row.
 - Any edit made through `patchMonthlyEntry()` automatically clears `isComplete` unless the patch explicitly changes completion.
 
 **Employee confirmation**
 
 - Every employee must be explicitly confirmed with `toggleEntryComplete()` before store-month close.
-- Confirmation is blocked when validation issues exist or salary is not configured.
+- Confirmation is blocked when structured validation issues exist or salary is not configured; the UI still shows the Chinese issue message.
 - Confirmation records `completedAt`.
 - Draft rows with edited values but no confirmation remain close blockers.
 
 **Close and unlock**
 
-- `requestClosePayroll()` blocks close when any row is invalid or unconfirmed.
+- `requestClosePayroll()` opens a grouped close confirmation summary for blockers, review-only exceptions, and clean rows.
+- The close confirmation modal only exposes the final month-close action when the grouped summary has no blocker rows.
 - `closeStoreMonth()` freezes a deep-cloned snapshot, stamps each newly closed row with formula version metadata, and appends close history.
 - `confirmClosePayroll()` creates an automatic recovery point after successful close in desktop mode.
 - `unlockStoreMonth()` requires a non-empty reason and clears the frozen snapshot.
 
 **Review and export**
 
-- Uses owner-first blocker and exception summaries from `getPayrollCloseBlockers()`, `getPayrollIssueItems()`, `getPayrollReviewStatus()`, and `getPayrollChangeItems()`.
+- Uses owner-first blocker and exception summaries from `getPayrollCloseBlockers()`, `getPayrollCloseSummary()`, `getPayrollIssueItems()`, `getPayrollReviewStatus()`, and `getPayrollChangeItems()`.
+- Close blockers from payroll logic are structured as `{ code, severity, field, message }`; payroll, attendance, reports, and overview pages render the `message` to preserve current Chinese wording.
+- Pending or invalid structured payroll adjustments surface through the same validation issue and close blocker flow; rejected records remain visible in the detail panel but do not affect pay.
 - Shows current employee wage components, calculated deductions/additions, recent salary adjustments, and close/unlock history.
 - Shows formula trace steps in the employee detail panel with source fields, formula text, input values, raw values, rounded amounts, and rounding explanations when trace data is available.
 - Older closed snapshots without stored trace or formula metadata show frozen payroll amounts and do not get recalculated or backfilled from live data.
 - `exportCurrentMonth()` exports CSV with either `草稿·未月结` or `正式·已月结` status.
+- Payroll logic now exposes `buildPayrollExportMetadata()` for future payment handoff and audit flows; the current payroll page does not download this metadata yet.
 
 ## Architecture
 
@@ -82,6 +88,7 @@ Payroll-Management is a page-level workflow over shared data and operation modul
 ### Business Logic (`src/payrollLogic.js`, `src/workspaceOperations.js`)
 
 - `getStorePayrollRows()`, `getPayrollStageSummary()`, `getPayrollCloseBlockers()`, and related helpers derive row state.
+- `buildPayrollExportMetadata()` derives draft/formal export handoff metadata from the same rows and monthly store record without mutating close state.
 - `closeStoreMonth()` and `unlockStoreMonth()` apply close/unlock mutations.
 
 ## Integration Points
@@ -101,16 +108,18 @@ Payroll-Management is a page-level workflow over shared data and operation modul
 
 - Payroll has no batch import from attendance systems or spreadsheets.
 - CSV export is single active store/month only from the payroll page.
-- Special adjustments are one free numeric field plus note, not categorized adjustment records.
+- Export metadata is available at the logic layer, but the payroll UI still downloads only the existing CSV file.
+- Payroll UI entry for special adjustments now supports per-employee structured records, but there is no import workflow, bulk editing, export manifest, or electronic approval workflow yet.
 - Open historical months recalculate from current employee salary and store config unless already closed.
 - Calculation trace and formula version metadata exist for newly closed snapshots, but legacy closed snapshots may not include that metadata.
+- Review-only exception items are still display strings rather than structured issue objects.
 - No electronic approval, payment status, payslip generation, or employee-facing acknowledgement.
 - Close/unlock audit is per store-month only; there is no global payroll audit log.
 
 ## Future Directions
 
-- Add categorized payroll adjustments with approval state.
 - Add attendance import and validation preview.
 - Add multi-store month close workflow from the overview.
-- Add payroll export packages with CSV, JSON metadata, and snapshot hashes.
+- Add payroll export packages that connect CSV, metadata sidecars, and snapshot hashes.
+- Add bulk/import/export-manifest support for categorized payroll adjustments.
 - Add payment status tracking after formal export.
