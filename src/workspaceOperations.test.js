@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createInitialWorkspace, migrateWorkspace } from "./payrollData.js";
-import { PAYROLL_FORMULA_METADATA, getAssignmentAtMonth, getMonthlyStoreRecord, getStorePayrollRows } from "./payrollLogic.js";
+import { PAYROLL_FORMULA_METADATA, createPayrollIssue, getAssignmentAtMonth, getMonthlyStoreRecord, getStorePayrollRows } from "./payrollLogic.js";
 import {
   archiveStore,
   closeStoreMonth,
@@ -116,7 +116,7 @@ describe("payroll close and unlock", () => {
     const initial = createInitialWorkspace();
     const store = initial.stores[0];
     const rows = getStorePayrollRows(initial, "2026-06", store).map((row) => ({ ...row, entry: { ...row.entry, isComplete: true } }));
-    rows[0] = { ...rows[0], validationIssues: ["加班时长不能小于 0"] };
+    rows[0] = { ...rows[0], validationIssues: [createPayrollIssue("PAYROLL_ENTRY_OVERTIME_HOURS_NON_NEGATIVE", "error", "entry.overtimeHours", "加班时长不能小于 0")] };
     expect(() => closeStoreMonth(initial, { storeId: store.id, month: "2026-06", rows, at: "now", eventId: "close", reason: "" })).toThrow("无效工资数据");
   });
 });

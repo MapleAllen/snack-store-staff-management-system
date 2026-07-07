@@ -42,6 +42,7 @@ Goals:
 Completed work:
 
 - `getPayrollCloseBlockers()` identifies month-close blockers.
+- `getPayrollCloseSummary()` groups blocker rows, review-only rows, and clean rows for the close confirmation modal.
 - `getPayrollIssueItems()` identifies non-blocking review items.
 - `getPayrollChangeItems()` summarizes notable row changes.
 - `getPayrollReviewStatus()` powers UI badges in the payroll workbench and mobile cards.
@@ -62,44 +63,64 @@ Completed work:
 - Add `PAYROLL_FORMULA_METADATA` and stamp newly closed snapshot rows with `core-payroll-v1` metadata.
 - Preserve stored formula metadata for closed rows while leaving older snapshots without metadata untouched.
 
-## Phase 4: Machine-Readable Validation — NOT STARTED
+## Phase 4: Machine-Readable Validation — PARTIALLY COMPLETED
 
-Status: **Not Started**
+Status: **Partially Completed**
 
 Goals:
 
 - Make payroll blockers usable by UI filters, exports, tests, and future support tooling.
 
-Remaining features:
+Completed work:
 
 - Replace string-only validation output with `{ code, message, field, severity }` while preserving current Chinese messages.
-- Classify issues as blocking, review-only, or informational.
-- Update close blockers and export rows to include stable issue codes.
+- Return structured close blockers for unconfigured salary, invalid rows, and missing employee confirmation.
+- Keep UI notices, blocker summaries, modal text, and CSV `数据校验` display based on the Chinese `message`.
+- Preserve closed snapshot semantics by returning empty live validation issues for closed rows without revalidating old snapshots.
+
+Remaining features:
+
+- Classify review-only and informational items with structured issue objects when needed.
+- Add structured export formats or metadata that expose issue codes outside the current Chinese CSV text.
 - Add tests for every blocker and review status category.
 
-## Phase 5: Commercial Rule Extensibility — NOT STARTED
+## Phase 5: Commercial Rule Extensibility — PARTIALLY COMPLETED
 
-Status: **Not Started**
+Status: **Partially Completed**
 
 Goals:
 
 - Support realistic payroll variations while keeping historical results stable.
 
+Completed work:
+
+- Add logic-level support for optional structured one-time monthly payroll adjustments.
+- Keep structured adjustments compatible with the legacy free numeric `specialAdjustment` field.
+- Support approved `bonus`, `deduction`, `reimbursement`, and signed `correction` records in payroll totals and trace output.
+- Validate structured adjustment category, status, amount, reason, and pending approval with stable issue codes.
+- Wire structured adjustment data into the payroll employee detail panel so UI edits write optional `entry.payrollAdjustments` without schema migration.
+
 Remaining features:
 
-- Add categorized salary components for bonuses, deductions, reimbursements, and one-time payroll adjustments.
+- Add import workflows for categorized one-time payroll adjustments.
 - Add effective-date lookup for salary components and store rules in open historical months.
 - Add optional overtime tiers and capped leave deduction policies.
 - Add impact preview for store rule changes before committing settings.
 - Keep all formula extensions behind versioned config and migration rules.
 
-## Phase 6: Export and Audit Metadata — NOT STARTED
+## Phase 6: Export and Audit Metadata — PARTIALLY COMPLETED
 
-Status: **Not Started**
+Status: **Partially Completed**
 
 Goals:
 
 - Make exported payroll data auditable and suitable for real payment handoff workflows.
+
+Completed work:
+
+- Add `buildPayrollExportMetadata()` as a logic-level handoff helper for Phase 4 reports and exports.
+- Include store ID/name, month, draft/formal status, row count, confirmed count, blocker/review/clean counts, estimated/confirmed/closed totals, generated time, and formula metadata/version summary.
+- Keep the helper read-only: it does not change CSV output, create JSON downloads, hash snapshots, recalculate closed snapshots, or mutate monthly records.
 
 Remaining features:
 
@@ -123,13 +144,16 @@ Completed work:
 - Formula trace parity tests prove detailed calculation totals match the existing flat breakdown.
 - Closed snapshot tests cover stored trace preservation and old snapshot behavior without live recalculation.
 - Closed snapshot tests cover formula metadata stamping, preservation, and legacy snapshot compatibility.
+- Validation tests cover structured issue fields and close blocker message compatibility.
+- Structured adjustment tests cover approved category impacts, pending/rejected behavior, invalid record issues, and legacy negative/large positive special adjustments.
+- Close summary tests cover blocker grouping, review-only grouping, clean rows, and blocker-free close readiness.
+- Export metadata tests cover open draft metadata, closed formal metadata, counts, totals, formula version summary, and closed snapshot immutability.
 
 Remaining features:
 
 - Add tests for all review status categories.
-- Add tests for negative special adjustments and large positive adjustments.
 - Add tests for closed snapshot stability after salary and rule changes.
-- Add export metadata and issue-code tests once structured export exists.
+- Add export metadata issue-code tests once review-only issue objects or structured export files exist.
 
 ## Implementation Rules
 

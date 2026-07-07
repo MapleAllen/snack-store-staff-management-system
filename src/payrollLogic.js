@@ -24,57 +24,139 @@ function isFiniteNumber(value) {
   return value !== "" && Number.isFinite(Number(value));
 }
 
+const PAYROLL_ADJUSTMENT_CATEGORIES = new Set(["bonus", "deduction", "reimbursement", "correction"]);
+const PAYROLL_ADJUSTMENT_STATUSES = new Set(["approved", "pending", "rejected"]);
+const POSITIVE_PAYROLL_ADJUSTMENT_CATEGORIES = new Set(["bonus", "deduction", "reimbursement"]);
+
+export function createPayrollIssue(code, severity, field, message) {
+  return { code, severity, field, message };
+}
+
+export function getPayrollIssueMessage(issue) {
+  return typeof issue === "string" ? issue : issue?.message ?? "";
+}
+
+function dedupePayrollIssues(issues) {
+  const seen = new Set();
+  return issues.filter((issue) => {
+    const key = typeof issue === "string" ? issue : `${issue.code}:${issue.field}:${issue.message}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getStructuredPayrollAdjustments(entry) {
+  return Array.isArray(entry?.payrollAdjustments) ? entry.payrollAdjustments : [];
+}
+
+function getStructuredPayrollAdjustmentImpact(adjustment) {
+  const amount = Number(adjustment?.amount);
+  if (adjustment?.status !== "approved" || !Number.isFinite(amount)) return 0;
+  if (!PAYROLL_ADJUSTMENT_CATEGORIES.has(adjustment?.category)) return 0;
+  if (POSITIVE_PAYROLL_ADJUSTMENT_CATEGORIES.has(adjustment.category) && amount <= 0) return 0;
+  if (adjustment.category === "deduction") return -amount;
+  return amount;
+}
+
+function summarizeStructuredPayrollAdjustments(entry) {
+  const adjustments = getStructuredPayrollAdjustments(entry);
+  const approved = adjustments.filter((adjustment) => adjustment?.status === "approved");
+  const approvedTotal = approved.reduce((sum, adjustment) => sum + getStructuredPayrollAdjustmentImpact(adjustment), 0);
+  return {
+    approvedCount: approved.length,
+    approvedTotal,
+    totalCount: adjustments.length,
+  };
+}
+
 export function validateStoreConfig(config) {
   const issues = [];
   const nonNegativeFields = [
-    ["socialInsuranceBase", "社保补助基数"],
-    ["mealAllowanceBase", "饭补基数"],
-    ["auditPassedBonus", "稽核达标奖励"],
-    ["auditFallbackBonus", "稽核未达标保底"],
-    ["nightShiftRate", "夜班每小时补贴"],
+    ["socialInsuranceBase", "社保补助基数", "STORE_CONFIG_SOCIAL_INSURANCE_BASE_NON_NEGATIVE"],
+    ["mealAllowanceBase", "饭补基数", "STORE_CONFIG_MEAL_ALLOWANCE_BASE_NON_NEGATIVE"],
+    ["auditPassedBonus", "稽核达标奖励", "STORE_CONFIG_AUDIT_PASSED_BONUS_NON_NEGATIVE"],
+    ["auditFallbackBonus", "稽核未达标保底", "STORE_CONFIG_AUDIT_FALLBACK_BONUS_NON_NEGATIVE"],
+    ["nightShiftRate", "夜班每小时补贴", "STORE_CONFIG_NIGHT_SHIFT_RATE_NON_NEGATIVE"],
   ];
   const positiveFields = [
-    ["leaveDaysDivisor", "请假天数除数"],
-    ["leaveHoursDivisor", "请假小时除数"],
-    ["monthDays", "每月计薪天数"],
+    ["leaveDaysDivisor", "请假天数除数", "STORE_CONFIG_LEAVE_DAYS_DIVISOR_POSITIVE"],
+    ["leaveHoursDivisor", "请假小时除数", "STORE_CONFIG_LEAVE_HOURS_DIVISOR_POSITIVE"],
+    ["monthDays", "每月计薪天数", "STORE_CONFIG_MONTH_DAYS_POSITIVE"],
   ];
-  for (const [key, label] of nonNegativeFields) {
-    if (!Number.isFinite(Number(config?.[key])) || Number(config[key]) < 0) issues.push(`${label}不能小于 0`);
+  for (const [key, label, code] of nonNegativeFields) {
+    if (!Number.isFinite(Number(config?.[key])) || Number(config?.[key]) < 0) {
+      issues.push(createPayrollIssue(code, "error", `config.${key}`, `${label}不能小于 0`));
+    }
   }
-  for (const [key, label] of positiveFields) {
-    if (!Number.isFinite(Number(config?.[key])) || Number(config[key]) <= 0) issues.push(`${label}必须大于 0`);
+  for (const [key, label, code] of positiveFields) {
+    if (!Number.isFinite(Number(config?.[key])) || Number(config?.[key]) <= 0) {
+      issues.push(createPayrollIssue(code, "error", `config.${key}`, `${label}必须大于 0`));
+    }
   }
   return issues;
 }
 
 export function validateEmployeeSalary(employee) {
-  if (!employee?.salaryConfigured) return ["薪资尚未设置"];
+  if (!employee?.salaryConfigured) return [createPayrollIssue("EMPLOYEE_SALARY_PENDING", "error", "employee.salaryConfigured", "薪资尚未设置")];
   const issues = [];
-  if (!Number.isFinite(Number(employee.baseSalary)) || Number(employee.baseSalary) <= 0) issues.push("基础工资必须大于 0");
-  if (!Number.isFinite(Number(employee.overtimeRate)) || Number(employee.overtimeRate) < 0) issues.push("加班时薪不能小于 0");
-  if (!Number.isFinite(Number(employee.attendanceBonus)) || Number(employee.attendanceBonus) < 0) issues.push("全勤奖金不能小于 0");
+  if (!Number.isFinite(Number(employee.baseSalary)) || Number(employee.baseSalary) <= 0) {
+    issues.push(createPayrollIssue("EMPLOYEE_BASE_SALARY_POSITIVE", "error", "employee.baseSalary", "基础工资必须大于 0"));
+  }
+  if (!Number.isFinite(Number(employee.overtimeRate)) || Number(employee.overtimeRate) < 0) {
+    issues.push(createPayrollIssue("EMPLOYEE_OVERTIME_RATE_NON_NEGATIVE", "error", "employee.overtimeRate", "加班时薪不能小于 0"));
+  }
+  if (!Number.isFinite(Number(employee.attendanceBonus)) || Number(employee.attendanceBonus) < 0) {
+    issues.push(createPayrollIssue("EMPLOYEE_ATTENDANCE_BONUS_NON_NEGATIVE", "error", "employee.attendanceBonus", "全勤奖金不能小于 0"));
+  }
   return issues;
 }
 
 export function validatePayrollEntry(entry, config) {
   const issues = validateStoreConfig(config);
   const fields = [
-    ["overtimeHours", "加班时长"],
-    ["leaveDays", "请假天数"],
-    ["leaveHours", "请假小时"],
-    ["nightShiftHours", "夜班时长"],
+    ["overtimeHours", "加班时长", "PAYROLL_ENTRY_OVERTIME_HOURS"],
+    ["leaveDays", "请假天数", "PAYROLL_ENTRY_LEAVE_DAYS"],
+    ["leaveHours", "请假小时", "PAYROLL_ENTRY_LEAVE_HOURS"],
+    ["nightShiftHours", "夜班时长", "PAYROLL_ENTRY_NIGHT_SHIFT_HOURS"],
   ];
-  for (const [key, label] of fields) {
+  for (const [key, label, codePrefix] of fields) {
     if (entry?.[key] === "" || entry?.[key] == null) continue;
-    if (!isFiniteNumber(entry[key])) issues.push(`${label}不是有效数字`);
-    else if (Number(entry[key]) < 0) issues.push(`${label}不能小于 0`);
+    if (!isFiniteNumber(entry[key])) issues.push(createPayrollIssue(`${codePrefix}_NUMBER`, "error", `entry.${key}`, `${label}不是有效数字`));
+    else if (Number(entry[key]) < 0) issues.push(createPayrollIssue(`${codePrefix}_NON_NEGATIVE`, "error", `entry.${key}`, `${label}不能小于 0`));
   }
   if (entry?.specialAdjustment !== "" && entry?.specialAdjustment != null && !isFiniteNumber(entry.specialAdjustment)) {
-    issues.push("特殊加减项不是有效数字");
+    issues.push(createPayrollIssue("PAYROLL_ENTRY_SPECIAL_ADJUSTMENT_NUMBER", "error", "entry.specialAdjustment", "特殊加减项不是有效数字"));
   }
-  if (Number(entry?.leaveDays || 0) > Number(config?.monthDays || 0)) issues.push("请假天数不能超过计薪天数");
-  if (Number(entry?.leaveHours || 0) > Number(config?.leaveHoursDivisor || 0)) issues.push("请假小时不能超过月计薪小时");
-  return [...new Set(issues)];
+  if (entry?.payrollAdjustments != null && !Array.isArray(entry.payrollAdjustments)) {
+    issues.push(createPayrollIssue("PAYROLL_ADJUSTMENTS_ARRAY", "error", "entry.payrollAdjustments", "工资调整记录格式无效"));
+  }
+  getStructuredPayrollAdjustments(entry).forEach((adjustment, index) => {
+    const field = `entry.payrollAdjustments.${index}`;
+    if (!PAYROLL_ADJUSTMENT_CATEGORIES.has(adjustment?.category)) {
+      issues.push(createPayrollIssue("PAYROLL_ADJUSTMENT_CATEGORY_INVALID", "error", `${field}.category`, "工资调整分类无效"));
+    }
+    if (!PAYROLL_ADJUSTMENT_STATUSES.has(adjustment?.status)) {
+      issues.push(createPayrollIssue("PAYROLL_ADJUSTMENT_STATUS_INVALID", "error", `${field}.status`, "工资调整状态无效"));
+    } else if (adjustment.status === "pending") {
+      issues.push(createPayrollIssue("PAYROLL_ADJUSTMENT_PENDING_APPROVAL", "error", `${field}.status`, "工资调整待审批"));
+    }
+    if (!isFiniteNumber(adjustment?.amount)) {
+      issues.push(createPayrollIssue("PAYROLL_ADJUSTMENT_AMOUNT_NUMBER", "error", `${field}.amount`, "工资调整金额不是有效数字"));
+    } else if (POSITIVE_PAYROLL_ADJUSTMENT_CATEGORIES.has(adjustment?.category) && Number(adjustment.amount) <= 0) {
+      issues.push(createPayrollIssue("PAYROLL_ADJUSTMENT_AMOUNT_POSITIVE", "error", `${field}.amount`, "工资调整金额必须大于 0"));
+    }
+    if (typeof adjustment?.reason !== "string" || !adjustment.reason.trim()) {
+      issues.push(createPayrollIssue("PAYROLL_ADJUSTMENT_REASON_REQUIRED", "error", `${field}.reason`, "工资调整原因不能为空"));
+    }
+  });
+  if (Number(entry?.leaveDays || 0) > Number(config?.monthDays || 0)) {
+    issues.push(createPayrollIssue("PAYROLL_ENTRY_LEAVE_DAYS_WITHIN_MONTH_DAYS", "error", "entry.leaveDays", "请假天数不能超过计薪天数"));
+  }
+  if (Number(entry?.leaveHours || 0) > Number(config?.leaveHoursDivisor || 0)) {
+    issues.push(createPayrollIssue("PAYROLL_ENTRY_LEAVE_HOURS_WITHIN_MONTH_HOURS", "error", "entry.leaveHours", "请假小时不能超过月计薪小时"));
+  }
+  return dedupePayrollIssues(issues);
 }
 
 export function formatCurrency(value) {
@@ -170,7 +252,9 @@ export function calculatePayrollDetailed(employee, entry, config) {
   const leaveDays = toNumber(entry.leaveDays);
   const leaveHours = toNumber(entry.leaveHours);
   const nightShiftHours = toNumber(entry.nightShiftHours);
-  const specialAdjustment = toNumber(entry.specialAdjustment);
+  const legacySpecialAdjustment = toNumber(entry.specialAdjustment);
+  const structuredAdjustmentSummary = summarizeStructuredPayrollAdjustments(entry);
+  const specialAdjustment = legacySpecialAdjustment + structuredAdjustmentSummary.approvedTotal;
   const attendanceEligible = leaveDays + leaveHours === 0;
   const leaveDaysDivisor = Number(config.leaveDaysDivisor) > 0 ? Number(config.leaveDaysDivisor) : 1;
   const leaveHoursDivisor = Number(config.leaveHoursDivisor) > 0 ? Number(config.leaveHoursDivisor) : 1;
@@ -308,9 +392,15 @@ export function calculatePayrollDetailed(employee, entry, config) {
         id: "special-adjustment",
         label: "特殊加减项",
         group: "addition",
-        sourceFields: ["entry.specialAdjustment"],
-        formula: "本月特殊加减项",
-        inputs: { specialAdjustment },
+        sourceFields: ["entry.specialAdjustment", "entry.payrollAdjustments"],
+        formula: "本月特殊加减项 + 已批准结构化工资调整",
+        inputs: {
+          legacySpecialAdjustment,
+          structuredAdjustmentTotal: structuredAdjustmentSummary.approvedTotal,
+          approvedStructuredAdjustmentCount: structuredAdjustmentSummary.approvedCount,
+          structuredAdjustmentCount: structuredAdjustmentSummary.totalCount,
+          specialAdjustment,
+        },
         rawValue: specialAdjustment,
         amount: specialAdjustment,
         rounding: noRounding(),
@@ -370,13 +460,67 @@ export function buildExportRows(store, rows, exportStatus = "草稿") {
     稽核达标: entry.auditPassed ? "是" : "否",
     录入完成: entry.isComplete ? "是" : "否",
     薪资已设置: employee.salaryConfigured ? "是" : "否",
-    数据校验: validationIssues.length ? validationIssues.join("；") : "通过",
+    数据校验: validationIssues.length ? validationIssues.map(getPayrollIssueMessage).join("；") : "通过",
     社保补助: breakdown.socialInsurance,
     饭补: breakdown.mealAllowance,
     特殊加减项: breakdown.specialAdjustment,
     备注: entry.note ?? "",
     实发工资: validationIssues.length ? "" : breakdown.netSalary,
   }));
+}
+
+function getPayrollExportStatus(rows, monthlyStore) {
+  if (monthlyStore?.status === "closed") return "formal";
+  if ((rows ?? []).length > 0 && rows.every((row) => row.recordStatus === "closed")) return "formal";
+  return "draft";
+}
+
+function summarizePayrollFormulaVersions(rows) {
+  const counts = new Map();
+  let missingCount = 0;
+  for (const row of rows ?? []) {
+    const version = row?.formulaMetadata?.version;
+    if (!version) {
+      missingCount += 1;
+      continue;
+    }
+    counts.set(version, (counts.get(version) ?? 0) + 1);
+  }
+  return {
+    rowVersionCounts: Array.from(counts, ([version, count]) => ({ version, count }))
+      .sort((a, b) => a.version.localeCompare(b.version)),
+    missingRowMetadataCount: missingCount,
+  };
+}
+
+export function buildPayrollExportMetadata(store, month, rows, monthlyStore, options = {}) {
+  const stageSummary = getPayrollStageSummary(rows ?? [], monthlyStore);
+  const closeSummary = getPayrollCloseSummary(rows ?? []);
+  const formulaSummary = summarizePayrollFormulaVersions(rows);
+
+  return {
+    store: {
+      id: store?.id ?? "",
+      name: store?.name ?? "",
+    },
+    month,
+    exportStatus: getPayrollExportStatus(rows, monthlyStore),
+    rowCount: (rows ?? []).length,
+    confirmedCount: stageSummary.confirmedCount,
+    blockerCount: closeSummary.blockerCount,
+    reviewCount: closeSummary.reviewCount,
+    cleanCount: closeSummary.cleanCount,
+    totals: {
+      estimated: stageSummary.forecastTotal,
+      confirmed: stageSummary.confirmedTotal,
+      closed: stageSummary.closedTotal,
+    },
+    generatedAt: options.generatedAt ?? null,
+    formulaMetadata: {
+      current: clonePayrollFormulaMetadata(options.formulaMetadata ?? PAYROLL_FORMULA_METADATA),
+      ...formulaSummary,
+    },
+  };
 }
 
 export function csvEscape(value) {
@@ -409,6 +553,7 @@ export function entryHasDraftChanges(entry) {
   if (!entry) return false;
   const draftFields = ["overtimeHours", "leaveDays", "leaveHours", "nightShiftHours", "specialAdjustment"];
   if (draftFields.some((field) => entry[field] !== "" && entry[field] != null)) return true;
+  if (Array.isArray(entry.payrollAdjustments) && entry.payrollAdjustments.length > 0) return true;
   if ((entry.note ?? "").trim()) return true;
   if (entry.auditPassed) return true;
   return false;
@@ -416,7 +561,7 @@ export function entryHasDraftChanges(entry) {
 
 export function getPayrollIssueItems(row) {
   if (!row?.breakdown || !row?.entry) return [];
-  const issues = [...(row.validationIssues ?? [])];
+  const issues = (row.validationIssues ?? []).map(getPayrollIssueMessage);
   if (row.breakdown.leaveDays > 0) issues.push(`请假 ${row.breakdown.leaveDays} 天`);
   if (row.breakdown.leaveHours > 0) issues.push(`请假 ${row.breakdown.leaveHours} 小时`);
   if (row.breakdown.specialAdjustment !== 0) issues.push(`特殊调整 ${formatCurrency(row.breakdown.specialAdjustment)}`);
@@ -426,13 +571,50 @@ export function getPayrollIssueItems(row) {
 
 export function getPayrollCloseBlockers(row) {
   if (!row) return [];
-  if (!row.employee?.salaryConfigured) return ["请先设置三项薪资"];
+  if (!row.employee?.salaryConfigured) {
+    return [createPayrollIssue("CLOSE_EMPLOYEE_SALARY_PENDING", "error", "employee.salaryConfigured", "请先设置三项薪资")];
+  }
   if ((row.validationIssues ?? []).length > 0) return [...row.validationIssues];
   if (row.recordStatus === "closed") return [];
   if (!entryHasInput(row.entry)) {
-    return [entryHasDraftChanges(row.entry) ? "已录入但还未确认完成" : "还未确认该员工本月数据"];
+    return [entryHasDraftChanges(row.entry)
+      ? createPayrollIssue("CLOSE_ENTRY_DRAFT_UNCONFIRMED", "error", "entry.isComplete", "已录入但还未确认完成")
+      : createPayrollIssue("CLOSE_ENTRY_UNCONFIRMED", "error", "entry.isComplete", "还未确认该员工本月数据")];
   }
   return [];
+}
+
+export function getPayrollCloseSummary(rows) {
+  const blockerRows = [];
+  const reviewRows = [];
+  const cleanRows = [];
+
+  for (const row of rows ?? []) {
+    const closeBlockers = getPayrollCloseBlockers(row);
+    if (closeBlockers.length > 0) {
+      blockerRows.push({ ...row, closeBlockers });
+      continue;
+    }
+
+    const issueItems = getPayrollIssueItems(row);
+    if (issueItems.length > 0) {
+      reviewRows.push({ ...row, issueItems });
+      continue;
+    }
+
+    cleanRows.push({ ...row });
+  }
+
+  return {
+    totalCount: (rows ?? []).length,
+    blockerCount: blockerRows.length,
+    reviewCount: reviewRows.length,
+    cleanCount: cleanRows.length,
+    canClose: (rows ?? []).length > 0 && blockerRows.length === 0,
+    blockerRows,
+    reviewRows,
+    cleanRows,
+  };
 }
 
 export function getPayrollChangeItems(row, storeConfig) {
@@ -450,7 +632,7 @@ export function getPayrollChangeItems(row, storeConfig) {
 export function getPayrollReviewStatus(row) {
   const issueItems = getPayrollIssueItems(row);
   if (!row.employee?.salaryConfigured) return { tone: "warning", label: "待设置", summary: "请先设置初始薪资" };
-  if ((row.validationIssues ?? []).length > 0) return { tone: "danger", label: "输入有误", summary: row.validationIssues[0] };
+  if ((row.validationIssues ?? []).length > 0) return { tone: "danger", label: "输入有误", summary: getPayrollIssueMessage(row.validationIssues[0]) };
   if (row.recordStatus === "closed") return { tone: "success", label: "已月结", summary: "工资结果已冻结" };
   if (!entryHasInput(row.entry)) {
     return entryHasDraftChanges(row.entry)
@@ -487,7 +669,7 @@ export function getStorePayrollRows(workspace, month, store, options = {}) {
       entry,
       breakdown: calculation.breakdown,
       calculationTrace: calculation.steps,
-      validationIssues: [...new Set(validationIssues)],
+      validationIssues: dedupePayrollIssues(validationIssues),
       recordStatus: monthlyStore.status,
     };
   });
