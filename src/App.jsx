@@ -17,10 +17,11 @@ import {
   getEmployeeAssignments,
   getEmployeesForStore,
   getMonthlyStoreRecord,
+  getPayrollCloseSummary,
+  getPayrollIssueMessage,
   getPayrollIssueItems,
   getPayrollStageSummary,
   getStorePayrollRows,
-  entryHasInput,
   sanitizeDownloadFileName,
   validateStoreConfig,
 } from "./payrollLogic.js";
@@ -305,7 +306,7 @@ export function App() {
   function toggleEntryComplete(employeeId, complete) {
     const row = payrollRows.find((item) => item.employee.id === employeeId);
     if (complete && row?.validationIssues?.length) {
-      setNotice(row.validationIssues[0]);
+      setNotice(getPayrollIssueMessage(row.validationIssues[0]));
       return;
     }
     patchMonthlyEntry(employeeId, {
@@ -318,21 +319,15 @@ export function App() {
   }
 
   function requestClosePayroll() {
-    const invalid = payrollRows.filter((row) => row.validationIssues?.length > 0);
-    if (invalid.length > 0) {
-      setNotice(`${invalid[0].employee.name}：${invalid[0].validationIssues[0]}`);
-      return;
-    }
-    const pending = payrollRows.filter((row) => !entryHasInput(row.entry));
-    if (pending.length > 0) {
-      setNotice(`还有 ${pending.length} 位员工未确认，暂不能月结`);
-      return;
-    }
-    setCloseModal({ issues: payrollRows.filter((row) => getPayrollIssueItems(row).length > 0) });
+    setCloseModal(getPayrollCloseSummary(payrollRows));
   }
 
   async function confirmClosePayroll() {
     if (!activeStore) return;
+    if (!closeModal?.canClose) {
+      setNotice("仍有员工阻塞本店月结，请先继续核对");
+      return;
+    }
     const now = new Date().toISOString();
     const next = closeStoreMonth(workspace, {
       storeId: activeStore.id,
@@ -340,7 +335,7 @@ export function App() {
       rows: payrollRows,
       at: now,
       eventId: makeId("close"),
-      reason: closeModal?.issues.length ? "异常确认后月结" : "工资核对完成",
+      reason: closeModal.reviewCount > 0 ? "异常确认后月结" : "工资核对完成",
     });
     setWorkspace(next);
     setCloseModal(null);
@@ -371,8 +366,9 @@ export function App() {
     const nextConfig = { ...activeStore.config, [key]: value };
     const error = validateStoreConfig(nextConfig)[0];
     if (error) {
-      setNotice(error);
-      return error;
+      const message = getPayrollIssueMessage(error);
+      setNotice(message);
+      return message;
     }
     const labels = {
       socialInsuranceBase: "社保补助基数", mealAllowanceBase: "饭补基数",
@@ -792,7 +788,37 @@ export function App() {
 
       {resignationModal ? <Modal title={resignationModal.mode === "resign" ? "办理离职" : "恢复在职"} onClose={() => setResignationModal(null)}><form className="modal-form" onSubmit={submitResignation}><div className="modal-summary"><strong>{resignationModal.employee.name}</strong><span>{activeStore.name} · 工号 {resignationModal.employee.id}</span></div>{resignationModal.mode === "resign" ? <label className="field"><span>离职日期</span><input type="date" value={resignationModal.date} onChange={(event) => setResignationModal((current) => ({ ...current, date: event.target.value }))} /></label> : <p className="modal-copy">恢复在职后，该员工会回到当前归属门店的工资和考勤列表中。</p>}<ModalActions onCancel={() => setResignationModal(null)} label={resignationModal.mode === "resign" ? "确认离职" : "确认恢复"} /></form></Modal> : null}
 
-      {closeModal ? <Modal title="确认本月月结" onClose={() => setCloseModal(null)}><div className="modal-form"><div className="modal-summary"><strong>{activeStore.name} · {activeMonth}</strong><span>月结后将冻结 {payrollRows.length} 位员工的工资结果。</span></div>{closeModal.issues.length > 0 ? <div className="modal-warning"><strong>仍有 {closeModal.issues.length} 位员工存在异常</strong>{closeModal.issues.slice(0, 5).map((row) => <span key={row.employee.id}>{row.employee.name}：{getPayrollIssueItems(row).join("、")}</span>)}</div> : <p className="modal-copy">所有员工已完成录入，当前没有需要复核的异常。</p>}<div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setCloseModal(null)}>继续核对</button><button className="primary-button" type="button" onClick={confirmClosePayroll}>{closeModal.issues.length ? "确认异常并月结" : "确认月结"}</button></div></div></Modal> : null}
+      {closeModal ? <Modal title="确认本月月结" onClose={() => setCloseModal(null)}>
+        <div className="modal-form">
+          <div className="modal-summary">
+            <strong>{activeStore.name} · {activeMonth}</strong>
+            <span>本次共核对 {closeModal.totalCount} 位员工：{closeModal.blockerCount} 位阻塞、{closeModal.reviewCount} 位需复核、{closeModal.cleanCount} 位无异常。</span>
+            <span>月结后将冻结当前工资结果，后续修改需要填写原因后解锁。</span>
+          </div>
+          {closeModal.blockerCount > 0 ? (
+            <div className="modal-warning">
+              <strong>仍有 {closeModal.blockerCount} 位员工阻塞月结</strong>
+              {closeModal.blockerRows.slice(0, 5).map((row) => (
+                <span key={row.employee.id}>{row.employee.name}：{row.closeBlockers.map(getPayrollIssueMessage).join("、")}</span>
+              ))}
+            </div>
+          ) : null}
+          {closeModal.reviewCount > 0 ? (
+            <div className="modal-warning">
+              <strong>{closeModal.reviewCount} 位员工存在复核提醒</strong>
+              {closeModal.reviewRows.slice(0, 5).map((row) => (
+                <span key={row.employee.id}>{row.employee.name}：{row.issueItems.join("、")}</span>
+              ))}
+            </div>
+          ) : null}
+          {closeModal.cleanCount > 0 ? <p className="modal-copy">{closeModal.cleanCount} 位员工已确认完成且没有复核提醒。</p> : null}
+          {closeModal.canClose ? <p className="modal-copy">当前没有月结阻塞，可以冻结本店本月工资。</p> : <p className="modal-copy">请先处理阻塞员工；清零后才能执行本店月结。</p>}
+          <div className="modal-actions">
+            <button className="secondary-button" type="button" onClick={() => setCloseModal(null)}>继续核对</button>
+            {closeModal.canClose ? <button className="primary-button" type="button" onClick={confirmClosePayroll}>{closeModal.reviewCount > 0 ? "确认复核并月结" : "确认月结"}</button> : null}
+          </div>
+        </div>
+      </Modal> : null}
 
       {unlockModal ? <Modal title="解锁本月工资" onClose={() => setUnlockModal(null)}><form className="modal-form" onSubmit={confirmUnlockPayroll}><div className="modal-summary"><strong>{activeStore.name} · {activeMonth}</strong><span>解锁后可以重新录入，原月结结果将停止使用。</span></div><label className="field"><span>解锁原因</span><textarea autoFocus value={unlockModal.reason} onChange={(event) => setUnlockModal({ reason: event.target.value })} placeholder="请说明发现的问题或需要修改的内容" /></label><ModalActions onCancel={() => setUnlockModal(null)} label="确认解锁" /></form></Modal> : null}
 

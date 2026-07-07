@@ -6,6 +6,7 @@ import {
   formatCurrency,
   getMonthlyStoreRecord,
   getPayrollCloseBlockers,
+  getPayrollIssueMessage,
   getPayrollIssueItems,
   getPayrollStageSummary,
   getStorePayrollRows,
@@ -62,7 +63,7 @@ export function ReportsPage({ workspace, activeMonth, setActiveMonth, onSelectSt
                       ? { label: "已确认待复核", tone: "warning" }
                       : { label: "可直接月结", tone: "success" };
             const topReview = item.reviewRows[0] ? `${item.reviewRows[0].employee.name}：${getPayrollIssueItems(item.reviewRows[0])[0]}` : "当前没有重点变化";
-            const topBlocker = item.blockerRows[0] ? `${item.blockerRows[0].employee.name}：${getPayrollCloseBlockers(item.blockerRows[0])[0]}` : "本店当前没有月结阻塞";
+            const topBlocker = item.blockerRows[0] ? `${item.blockerRows[0].employee.name}：${getPayrollIssueMessage(getPayrollCloseBlockers(item.blockerRows[0])[0])}` : "本店当前没有月结阻塞";
             return (
               <button key={item.store.id} className="report-row report-row--detailed" type="button" disabled={item.store.status === "archived"} onClick={() => { onSelectStore(item.store.id); onNavigate("payroll"); }}>
                 <div className="report-row__label">

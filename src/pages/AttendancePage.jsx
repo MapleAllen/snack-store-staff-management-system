@@ -1,6 +1,7 @@
 import { PageHeader } from "../components/PageHeader.jsx";
 import { StatCard } from "../components/StatCard.jsx";
 import { SectionHeading } from "../components/SectionHeading.jsx";
+import { getPayrollIssueMessage } from "../payrollLogic.js";
 
 const ATTENDANCE_FIELD_LABELS = {
   overtimeHours: "加班时长",
@@ -95,7 +96,7 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
                     />
                   </td>
                   <td>
-                    <button className={row.entry.isComplete ? "completion-button completion-button--strong is-complete" : "completion-button completion-button--strong"} type="button" disabled={isLocked || (!row.entry.isComplete && row.validationIssues.length > 0)} title={row.validationIssues[0]} onClick={() => toggleComplete(row.employee.id, !row.entry.isComplete)}>{row.entry.isComplete ? "已确认完成" : row.validationIssues.length ? "先修正再确认" : "确认该员工完成"}</button>
+                    <button className={row.entry.isComplete ? "completion-button completion-button--strong is-complete" : "completion-button completion-button--strong"} type="button" disabled={isLocked || (!row.entry.isComplete && row.validationIssues.length > 0)} title={getPayrollIssueMessage(row.validationIssues[0])} onClick={() => toggleComplete(row.employee.id, !row.entry.isComplete)}>{row.entry.isComplete ? "已确认完成" : row.validationIssues.length ? "先修正再确认" : "确认该员工完成"}</button>
                   </td>
                 </tr>
               ))}
