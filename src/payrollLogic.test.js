@@ -11,6 +11,7 @@ import {
   getPayrollCloseBlockers,
   getPayrollCloseSummary,
   getPayrollIssueMessage,
+  getPayrollMonthCloseReadiness,
   getPayrollStageSummary,
   getStorePayrollRows,
   sanitizeDownloadFileName,
@@ -151,6 +152,141 @@ describe("payroll export metadata", () => {
     expect(metadata.totals.confirmed).toBe(snapshot[0].breakdown.netSalary + snapshot[1].breakdown.netSalary);
     expect(metadata.totals.closed).toBe(snapshot[0].breakdown.netSalary + snapshot[1].breakdown.netSalary);
     expect(metadata.totals.closed).not.toBe(calculatePayroll(closedWorkspace.employees[0], snapshot[0].entry, closedStore.config).netSalary);
+  });
+});
+
+describe("all-store payroll close readiness", () => {
+  function createReadinessWorkspace() {
+    const base = createInitialWorkspace();
+    const stores = base.stores.slice(0, 4);
+    const employeeIds = new Set([
+      "demo-1-employee-1",
+      "demo-2-employee-1",
+      "demo-3-employee-1",
+    ]);
+    return {
+      ...base,
+      stores,
+      employees: base.employees.filter((employee) => employeeIds.has(employee.id)),
+      assignments: base.assignments.filter((assignment) => employeeIds.has(assignment.employeeId)),
+    };
+  }
+
+  it("classifies ready, blocked, closed, and empty active stores with deduplicated blocker rows", () => {
+    const month = "2026-06";
+    const workspace = createReadinessWorkspace();
+    const [readyStore, blockedStore, closedStore] = workspace.stores;
+    const closedSourceRow = getStorePayrollRows(workspace, month, closedStore)[0];
+    const frozenSnapshotRow = {
+      ...closedSourceRow,
+      entry: { ...closedSourceRow.entry, isComplete: true, completedAt: "2026-06-30T10:00:00Z" },
+      breakdown: { ...closedSourceRow.breakdown, netSalary: 4321.12 },
+    };
+    const readinessWorkspace = {
+      ...workspace,
+      employees: workspace.employees.map((employee) => employee.id === closedSourceRow.employee.id
+        ? { ...employee, baseSalary: employee.baseSalary + 5000 }
+        : employee),
+      stores: workspace.stores.map((store) => store.id === closedStore.id
+        ? { ...store, config: { ...store.config, mealAllowanceBase: store.config.mealAllowanceBase + 5000 } }
+        : store),
+      monthlyRecords: {
+        [month]: {
+          [readyStore.id]: {
+            rows: {
+              "demo-1-employee-1": { isComplete: true, auditPassed: true, completedAt: "2026-06-30T10:00:00Z" },
+            },
+          },
+          [blockedStore.id]: {
+            rows: {
+              "demo-2-employee-1": { overtimeHours: "-1", leaveDays: "not-a-number", isComplete: false },
+            },
+          },
+          [closedStore.id]: {
+            status: "closed",
+            closedAt: "2026-06-30T12:00:00Z",
+            snapshot: [frozenSnapshotRow],
+          },
+        },
+      },
+    };
+
+    const readiness = getPayrollMonthCloseReadiness(readinessWorkspace, month);
+    const byStore = Object.fromEntries(readiness.stores.map((store) => [store.storeId, store]));
+
+    expect(readiness).toMatchObject({
+      month,
+      storeCount: 4,
+      readyCount: 1,
+      blockedCount: 1,
+      closedCount: 1,
+      emptyCount: 1,
+      blockerRowCount: 1,
+      allOpenStoresReady: false,
+    });
+    expect(byStore[readyStore.id]).toMatchObject({ status: "ready", rowCount: 1, blockerCount: 0, reviewCount: 0, cleanCount: 1 });
+    expect(byStore[blockedStore.id]).toMatchObject({
+      status: "blocked",
+      rowCount: 1,
+      blockerCount: 1,
+      pendingCount: 1,
+      invalidCount: 1,
+    });
+    expect(byStore[blockedStore.id].blockers[0]).toMatchObject({
+      employeeId: "demo-2-employee-1",
+      issues: expect.arrayContaining([
+        expect.objectContaining({ code: "PAYROLL_ENTRY_OVERTIME_HOURS_NON_NEGATIVE" }),
+        expect.objectContaining({ code: "PAYROLL_ENTRY_LEAVE_DAYS_NUMBER" }),
+      ]),
+    });
+    expect(byStore[closedStore.id]).toMatchObject({
+      status: "closed",
+      totals: { estimated: 4321.12, confirmed: 4321.12, closed: 4321.12 },
+    });
+    expect(byStore["demo-store-4"]).toMatchObject({ status: "empty", rowCount: 0, blockerCount: 0 });
+    expect(readiness.totals).toEqual({
+      estimated: byStore[readyStore.id].totals.estimated + 4321.12,
+      confirmed: byStore[readyStore.id].totals.confirmed + 4321.12,
+      closed: 4321.12,
+    });
+  });
+
+  it("keeps review-only rows ready and excludes archived stores", () => {
+    const month = "2026-06";
+    const workspace = createReadinessWorkspace();
+    const readyStore = workspace.stores[0];
+    const archivedStore = workspace.stores[1];
+    const readiness = getPayrollMonthCloseReadiness({
+      ...workspace,
+      stores: workspace.stores.map((store) => store.id === readyStore.id ? store : { ...store, status: "archived" }),
+      employees: workspace.employees.filter((employee) => employee.id === "demo-1-employee-1"),
+      assignments: workspace.assignments.filter((assignment) => assignment.employeeId === "demo-1-employee-1"),
+      monthlyRecords: {
+        [month]: {
+          [readyStore.id]: {
+            rows: {
+              "demo-1-employee-1": { isComplete: true, auditPassed: false, completedAt: "2026-06-30T10:00:00Z" },
+            },
+          },
+        },
+      },
+    }, month);
+
+    expect(readiness).toMatchObject({
+      storeCount: 1,
+      readyCount: 1,
+      emptyCount: 0,
+      blockerRowCount: 0,
+      reviewCount: 1,
+      allOpenStoresReady: true,
+    });
+    expect(readiness.stores.find((store) => store.storeId === readyStore.id)).toMatchObject({
+      status: "ready",
+      reviewCount: 1,
+      blockers: [],
+      reviews: [{ employeeId: "demo-1-employee-1", issueItems: ["稽核未达标"] }],
+    });
+    expect(readiness.stores.some((store) => store.storeId === archivedStore.id)).toBe(false);
   });
 });
 

@@ -70,17 +70,21 @@ Remaining features:
 - Add duplicate employee and invalid date detection during import.
 - Add tests for import validation without applying changes.
 
-## Phase 4: Batch Close and Payment Handoff — NOT STARTED
+## Phase 4: Batch Close and Payment Handoff — PARTIALLY COMPLETED
 
-Status: **Not Started**
+Status: **Partially Completed**
 
 Goals:
 
 - Let owners close and hand off payroll across all stores efficiently.
 
+Completed work:
+
+- Add a pure all-active-store payroll close-readiness summary for the overview, including per-store statuses, structured blocker rows, review counts, and estimated/confirmed/closed totals.
+- Keep the summary preview-only: archived stores are excluded, empty stores are not ready, and closed stores use frozen snapshot rows.
+
 Remaining features:
 
-- Add all-store close readiness from the overview dashboard.
 - Add batch close operation with per-store blocker report.
 - Add multi-store export package for closed months.
 - Add payment status tracking: not exported, exported, paid, corrected.
@@ -119,6 +123,7 @@ Completed work:
 - Tests cover logic-level structured adjustment categories, pending/rejected behavior, invalid adjustment records, and legacy special adjustment compatibility.
 - Tests cover close confirmation summary grouping and blocker-free close readiness.
 - Tests cover draft/formal export metadata handoff, counts, totals, and closed snapshot source stability.
+- Tests cover all-store readiness states, deduplicated blocker rows, review-only readiness, archived-store exclusion, aggregate totals, and frozen closed snapshot totals.
 - Manual UI verification covers structured adjustment add/edit/delete, confirmation clearing, approval status impact, pending blockers, rejected no-impact behavior, and mobile layout.
 
 Remaining features:

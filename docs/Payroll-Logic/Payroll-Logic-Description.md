@@ -59,6 +59,8 @@ The module is implemented in `src/payrollLogic.js` as a collection of pure funct
 - `getPayrollStageSummary(rows, monthlyStore)` computes forecast, confirmed, and closed totals and counts for confirmed, pending, unconfigured, invalid, review, draft, and not-started rows.
 - `getPayrollCloseBlockers(row)` returns structured issues for reasons that prevent closing: unconfigured salary, validation errors, or missing explicit employee confirmation.
 - `getPayrollCloseSummary(rows)` groups a store-month into blocker rows, review-only rows, and clean rows for the close confirmation modal.
+- `getPayrollMonthCloseReadiness(workspace, month)` is a read-only active-store summary for the overview. It returns each store's `ready`, `blocked`, `closed`, or `empty` state, deduplicated blocker-row count, review count, structured issues per blocker row, and estimated/confirmed/closed totals.
+- The all-store summary excludes archived stores, does not treat empty stores as ready, and treats review-only rows as ready while retaining their review count. Closed stores read existing frozen snapshot rows through `getStorePayrollRows()` and are never recalculated from live salary or rules.
 - `getPayrollIssueItems(row)` identifies Chinese display strings for non-blocking review items such as leave, special adjustments, and audit fallback.
 - `getPayrollChangeItems(row, storeConfig)` lists notable changes for the owner review panel.
 - `getPayrollReviewStatus(row)` converts row state into UI badge data with `tone`, `label`, and `summary`.
@@ -102,6 +104,8 @@ Payroll-Logic is a pure business-logic module. It consumes workspace-shaped obje
   - Central row constructor; handles closed snapshot vs open live calculation.
 - `getPayrollStageSummary(rows, monthlyStore)`
   - Central aggregate for overview, payroll, and reports.
+- `getPayrollMonthCloseReadiness(workspace, month)`
+  - Central read-only all-active-store close readiness and preview aggregate used by the overview; it does not call `closeStoreMonth()` or mutate workspace state.
 - `getPayrollCloseBlockers(row)`, `getPayrollCloseSummary(rows)`, and `getPayrollIssueItems(row)`
   - Owner-first status classification and grouped close readiness summaries.
 - `buildExportRows(store, rows, exportStatus)`
@@ -118,7 +122,7 @@ Payroll-Logic is a pure business-logic module. It consumes workspace-shaped obje
 - `src/App.jsx`
   - Computes active store employees, payroll rows, selected row, totals, completion rate, exceptions, CSV export, and modal defaults.
 - `src/pages/HomePage.jsx`
-  - Uses summaries, blockers, and issue items for the owner command center.
+  - Uses `getPayrollMonthCloseReadiness()` for the owner command center's all-store totals, status cards, blocker digest, and next-action inputs.
 - `src/pages/PayrollPage.jsx`
   - Uses review status, blockers, issue items, change items, formatting, draft helpers, and structured adjustment validation messages in the employee detail panel.
 - `src/pages/AttendancePage.jsx`
@@ -137,6 +141,7 @@ Payroll-Logic is a pure business-logic module. It consumes workspace-shaped obje
 - Open-month rows are recalculated from current config and employee fields, so only closed snapshots provide historical immutability.
 - The module has no incremental memoization; pages recalculate row arrays in render flow.
 - Older closed snapshots created before trace and formula metadata storage do not have source fields, formula text, rounding metadata, or formula version metadata; they still display frozen payroll amounts.
+- The readiness helper is preview-only: it does not provide a batch close operation, confirmation modal, recovery point, or multi-store export package.
 
 ## Future Directions
 

@@ -47,6 +47,7 @@ The workflow is implemented across `src/App.jsx`, `src/pages/PayrollPage.jsx`, `
 **Review and export**
 
 - Uses owner-first blocker and exception summaries from `getPayrollCloseBlockers()`, `getPayrollCloseSummary()`, `getPayrollIssueItems()`, `getPayrollReviewStatus()`, and `getPayrollChangeItems()`.
+- `getPayrollMonthCloseReadiness()` provides the overview with a read-only all-active-store close preview. It reuses the same per-store close blockers, keeps review-only exceptions non-blocking, and reads closed totals from frozen snapshots.
 - Close blockers from payroll logic are structured as `{ code, severity, field, message }`; payroll, attendance, reports, and overview pages render the `message` to preserve current Chinese wording.
 - Pending or invalid structured payroll adjustments surface through the same validation issue and close blocker flow; rejected records remain visible in the detail panel but do not affect pay.
 - Shows current employee wage components, calculated deductions/additions, recent salary adjustments, and close/unlock history.
@@ -87,7 +88,7 @@ Payroll-Management is a page-level workflow over shared data and operation modul
 
 ### Business Logic (`src/payrollLogic.js`, `src/workspaceOperations.js`)
 
-- `getStorePayrollRows()`, `getPayrollStageSummary()`, `getPayrollCloseBlockers()`, and related helpers derive row state.
+- `getStorePayrollRows()`, `getPayrollStageSummary()`, `getPayrollCloseBlockers()`, `getPayrollMonthCloseReadiness()`, and related helpers derive row and all-store preview state.
 - `buildPayrollExportMetadata()` derives draft/formal export handoff metadata from the same rows and monthly store record without mutating close state.
 - `closeStoreMonth()` and `unlockStoreMonth()` apply close/unlock mutations.
 
@@ -115,6 +116,7 @@ Payroll-Management is a page-level workflow over shared data and operation modul
 - Review-only exception items are still display strings rather than structured issue objects.
 - No electronic approval, payment status, payslip generation, or employee-facing acknowledgement.
 - Close/unlock audit is per store-month only; there is no global payroll audit log.
+- All-store readiness is preview-only; no batch close, shared close confirmation, automatic recovery point, or multi-store export is implemented.
 
 ## Future Directions
 

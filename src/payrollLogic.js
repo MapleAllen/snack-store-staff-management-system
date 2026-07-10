@@ -701,6 +701,78 @@ export function getPayrollStageSummary(rows, monthlyStore) {
   };
 }
 
+export function getPayrollMonthCloseReadiness(workspace, month) {
+  const stores = (workspace?.stores ?? [])
+    .filter((store) => store.status === "active")
+    .map((store) => {
+      const rows = getStorePayrollRows(workspace, month, store);
+      const monthlyStore = getMonthlyStoreRecord(workspace, month, store.id);
+      const stage = getPayrollStageSummary(rows, monthlyStore);
+      const closeSummary = getPayrollCloseSummary(rows);
+      const status = stage.isClosed
+        ? "closed"
+        : rows.length === 0
+          ? "empty"
+          : closeSummary.canClose
+            ? "ready"
+            : "blocked";
+
+      return {
+        storeId: store.id,
+        storeName: store.name,
+        status,
+        rowCount: rows.length,
+        blockerCount: closeSummary.blockerCount,
+        reviewCount: closeSummary.reviewCount,
+        cleanCount: closeSummary.cleanCount,
+        confirmedCount: stage.confirmedCount,
+        pendingCount: stage.pendingCount,
+        unconfiguredCount: stage.unconfiguredCount,
+        invalidCount: stage.invalidCount,
+        blockers: closeSummary.blockerRows.map((row) => ({
+          employeeId: row.employee.id,
+          employeeName: row.employee.name,
+          issues: row.closeBlockers.map((issue) => ({ ...issue })),
+        })),
+        reviews: closeSummary.reviewRows.map((row) => ({
+          employeeId: row.employee.id,
+          employeeName: row.employee.name,
+          issueItems: [...row.issueItems],
+        })),
+        totals: {
+          estimated: stage.forecastTotal,
+          confirmed: stage.confirmedTotal,
+          closed: stage.closedTotal,
+        },
+      };
+    });
+
+  const sum = (key) => stores.reduce((total, store) => total + store[key], 0);
+  const totals = stores.reduce((summary, store) => ({
+    estimated: summary.estimated + store.totals.estimated,
+    confirmed: summary.confirmed + store.totals.confirmed,
+    closed: summary.closed + store.totals.closed,
+  }), { estimated: 0, confirmed: 0, closed: 0 });
+
+  return {
+    month,
+    storeCount: stores.length,
+    readyCount: stores.filter((store) => store.status === "ready").length,
+    blockedCount: stores.filter((store) => store.status === "blocked").length,
+    closedCount: stores.filter((store) => store.status === "closed").length,
+    emptyCount: stores.filter((store) => store.status === "empty").length,
+    blockerRowCount: sum("blockerCount"),
+    employeeCount: sum("rowCount"),
+    pendingCount: sum("pendingCount"),
+    unconfiguredCount: sum("unconfiguredCount"),
+    invalidCount: sum("invalidCount"),
+    reviewCount: sum("reviewCount"),
+    totals,
+    allOpenStoresReady: stores.length > 0 && stores.every((store) => store.status === "ready" || store.status === "closed"),
+    stores,
+  };
+}
+
 export function createEmployeeDraft(employee) {
   return {
     name: employee?.name ?? "",
