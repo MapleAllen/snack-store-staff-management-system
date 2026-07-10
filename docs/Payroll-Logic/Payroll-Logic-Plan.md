@@ -47,7 +47,23 @@ Completed work:
 - `getPayrollChangeItems()` summarizes notable row changes.
 - `getPayrollReviewStatus()` powers UI badges in the payroll workbench and mobile cards.
 
-## Phase 3: Calculation Traceability — DONE
+## Phase 3: All-Store Close Readiness — DONE
+
+Status: **Done**
+
+Goals:
+
+- Establish a tested, read-only contract describing which active stores can close in one month.
+
+Completed work:
+
+- Add `getPayrollMonthCloseReadiness(workspace, month)` with per-store `ready`, `blocked`, `closed`, and `empty` statuses.
+- Deduplicate close blockers by employee row while retaining every structured issue on that row.
+- Preserve review-only row counts without making them block a ready store.
+- Exclude archived stores and use frozen snapshot rows for closed-store totals.
+- Reuse the helper in the overview without adding a batch close mutation or UI action.
+
+## Phase 4: Calculation Traceability — DONE
 
 Status: **Done**
 
@@ -63,7 +79,7 @@ Completed work:
 - Add `PAYROLL_FORMULA_METADATA` and stamp newly closed snapshot rows with `core-payroll-v1` metadata.
 - Preserve stored formula metadata for closed rows while leaving older snapshots without metadata untouched.
 
-## Phase 4: Machine-Readable Validation — PARTIALLY COMPLETED
+## Phase 5: Machine-Readable Validation — PARTIALLY COMPLETED
 
 Status: **Partially Completed**
 
@@ -84,7 +100,7 @@ Remaining features:
 - Add structured export formats or metadata that expose issue codes outside the current Chinese CSV text.
 - Add tests for every blocker and review status category.
 
-## Phase 5: Commercial Rule Extensibility — PARTIALLY COMPLETED
+## Phase 6: Commercial Rule Extensibility — PARTIALLY COMPLETED
 
 Status: **Partially Completed**
 
@@ -108,7 +124,7 @@ Remaining features:
 - Add impact preview for store rule changes before committing settings.
 - Keep all formula extensions behind versioned config and migration rules.
 
-## Phase 6: Export and Audit Metadata — PARTIALLY COMPLETED
+## Phase 7: Export and Audit Metadata — PARTIALLY COMPLETED
 
 Status: **Partially Completed**
 
@@ -130,7 +146,7 @@ Remaining features:
 - Add selective exports for confirmed rows, exception rows, and all stores in a month.
 - Add export format versioning.
 
-## Phase 7: Testing Strategy — PARTIALLY COMPLETED
+## Phase 8: Testing Strategy — PARTIALLY COMPLETED
 
 Status: **Partially Completed**
 
@@ -148,6 +164,7 @@ Completed work:
 - Structured adjustment tests cover approved category impacts, pending/rejected behavior, invalid record issues, and legacy negative/large positive special adjustments.
 - Close summary tests cover blocker grouping, review-only grouping, clean rows, and blocker-free close readiness.
 - Export metadata tests cover open draft metadata, closed formal metadata, counts, totals, formula version summary, and closed snapshot immutability.
+- All-store readiness tests cover ready/blocked/closed/empty status, archived-store exclusion, review-only readiness, deduplicated blocker rows, aggregate totals, and frozen closed snapshot totals.
 
 Remaining features:
 

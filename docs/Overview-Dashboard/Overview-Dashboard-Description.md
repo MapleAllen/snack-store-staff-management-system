@@ -16,9 +16,9 @@ The module is implemented in `src/pages/HomePage.jsx`. It receives `workspace`, 
 
 **Active-store summary**
 
-- Uses active stores only: `workspace.stores.filter((store) => store.status === "active")`.
-- Builds `storeSummaries` by calculating rows, monthly store record, stage summary, review rows, and blocker rows for each store.
-- Aggregates forecast, confirmed, closed, employee count, unconfigured count, pending count, invalid count, and exception count.
+- Uses `getPayrollMonthCloseReadiness(workspace, activeMonth)` as the single active-store source of truth.
+- Receives per-store ready/blocked/closed/empty status, structured blocker rows, review rows, and estimated/confirmed/closed totals from the pure helper.
+- The helper excludes archived stores, counts one blocker per employee row even when it has multiple close conditions, preserves review-only exceptions, and reads closed stores from frozen snapshots.
 
 **Recommended next action**
 
@@ -48,7 +48,7 @@ Overview-Dashboard is a pure page component that derives dashboard state from sh
 ### UI (`src/pages/HomePage.jsx`)
 
 - `HomePage({ workspace, activeMonth, onNavigate, onSelectStore })`
-  - Computes store summaries and aggregate counts.
+  - Reuses the all-store readiness aggregate for store summaries and aggregate counts.
   - Chooses the recommended action.
   - Renders command center, stats, store cards, blocker digest, and workflow list.
 - `goToPayroll(storeId)`
@@ -56,18 +56,10 @@ Overview-Dashboard is a pure page component that derives dashboard state from sh
 
 ### Logic Dependencies (`src/payrollLogic.js`)
 
-- `getStorePayrollRows()`
-  - Builds row state per store.
-- `getMonthlyStoreRecord()`
-  - Reads current store-month status.
-- `getPayrollStageSummary()`
-  - Provides totals and counts.
-- `getPayrollCloseBlockers()`
-  - Identifies blocking rows with structured blocker issues.
+- `getPayrollMonthCloseReadiness()`
+  - Provides active-store close readiness, deduplicated blocker rows, review rows, and distinct estimated/confirmed/closed totals without changing workspace state.
 - `getPayrollIssueMessage()`
   - Extracts the Chinese blocker message for dashboard display and grouping.
-- `getPayrollIssueItems()`
-  - Identifies review-only exceptions.
 
 ## Integration Points
 
@@ -84,6 +76,7 @@ Overview-Dashboard is a pure page component that derives dashboard state from sh
 - Active month is controlled elsewhere; HomePage does not provide a month picker.
 - Recommended action uses static priority rules and does not learn from user behavior.
 - No all-store batch action can be executed directly from the dashboard.
+- The existing readiness summary is preview-only; it does not add a batch close button, confirmation modal, recovery point, or export package.
 - No trend comparison against previous months.
 - No persistent notification list or task completion history.
 - No export, print, or owner summary report from the dashboard.

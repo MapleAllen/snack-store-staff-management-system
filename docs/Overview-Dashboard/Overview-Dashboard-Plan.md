@@ -45,17 +45,22 @@ Remaining features:
 - Add previous-month comparison for total payroll and blocker count.
 - Add tests for month-level aggregate derivation.
 
-## Phase 3: Batch Readiness and Action Panel — NOT STARTED
+## Phase 3: Batch Readiness and Action Panel — PARTIALLY COMPLETED
 
-Status: **Not Started**
+Status: **Partially Completed**
 
 Goals:
 
 - Support all-store month-end workflows from the dashboard.
 
+Completed work:
+
+- Add tested pure all-active-store close readiness in payroll logic and reuse it in the overview.
+- Return per-store ready/blocked/closed/empty status, row-deduplicated blocker counts with structured issues, review counts, and distinct estimated/confirmed/closed totals.
+- Exclude archived stores, keep empty stores out of ready counts, retain review-only exceptions, and read closed totals from frozen snapshots.
+
 Remaining features:
 
-- Add all-store close readiness report.
 - Add batch close preview with per-store blockers.
 - Add shortcut to export all closed stores for the selected month.
 - Add dashboard confirmation modal for batch operations.
@@ -89,9 +94,9 @@ Remaining features:
 - Add CSV/JSON dashboard summary export.
 - Include store status, blockers, exceptions, confirmed totals, closed totals, and export status.
 
-## Phase 6: Testing Strategy — NOT STARTED
+## Phase 6: Testing Strategy — PARTIALLY COMPLETED
 
-Status: **Not Started**
+Status: **Partially Completed**
 
 Goals:
 
@@ -102,7 +107,7 @@ Remaining features:
 - Add tests for recommended action priority order.
 - Add tests for active-store filtering.
 - Add tests for ready-to-close store count.
-- Add tests for batch readiness once implemented.
+- Add tests for any future batch close execution and confirmation semantics.
 
 ## Implementation Rules
 
