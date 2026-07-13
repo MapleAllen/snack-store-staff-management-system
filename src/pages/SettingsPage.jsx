@@ -95,7 +95,7 @@ export function SettingsPage({
 
   return (
     <>
-      <PageHeader eyebrow="设置" title="系统与门店设置" description="管理门店、工资规则与本机恢复方案。" actions={<button className="primary-button" type="button" onClick={onCreateStore}>新增门店</button>} />
+      <PageHeader eyebrow="门店设置" title="门店、工资规则与数据安全" description="常用设置集中在这一页，不需要进入更深的菜单。" actions={<button className="primary-button" type="button" onClick={onCreateStore}>新增门店</button>} />
       <section className="panel page-panel">
         <SectionHeading eyebrow="门店管理" title="营业与历史门店" description="停用门店不会删除员工或历史工资。" />
         <div className="store-management-grid">

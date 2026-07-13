@@ -122,6 +122,21 @@ function formatTraceRounding(step) {
   return `原始值 ${formatTraceValue(step.rawValue)}，按两位小数取整`;
 }
 
+function DetailDisclosure({ title, description, value, children }) {
+  return (
+    <details className="detail-disclosure">
+      <summary>
+        <span>
+          <strong>{title}</strong>
+          <small>{description}</small>
+        </span>
+        {value ? <b>{value}</b> : null}
+      </summary>
+      <div className="detail-disclosure__body">{children}</div>
+    </details>
+  );
+}
+
 export function PayrollPage({
   activeStore,
   activeMonth,
@@ -836,15 +851,12 @@ export function PayrollPage({
                 </div>
               </div>
 
-              <div className="detail-card payroll-adjustments-card">
-                <div className="payroll-adjustments-card__head">
-                  <div>
-                    <h3>一次性工资调整</h3>
-                    <p>结构化记录会和上方自由数字调整一起计入特殊加减项；只有已批准记录影响实发。</p>
-                  </div>
-                  <strong>{formatCurrency(approvedPayrollAdjustmentTotal)}</strong>
-                </div>
-
+              <DetailDisclosure
+                title="一次性工资调整"
+                description="奖金、扣款、报销和修正；只有已批准记录影响实发"
+                value={formatCurrency(approvedPayrollAdjustmentTotal)}
+              >
+                <div className="payroll-adjustments-card">
                 <div className="payroll-adjustment-form">
                   <label className="field">
                     <span>分类</span>
@@ -965,8 +977,14 @@ export function PayrollPage({
                     ))
                   )}
                 </div>
-              </div>
+                </div>
+              </DetailDisclosure>
 
+              <DetailDisclosure
+                title="工资构成与计算依据"
+                description="查看扣减、增加项、公式来源与取整过程"
+                value={selectedReviewRow.employee.salaryConfigured ? formatCurrency(selectedReviewRow.breakdown.netSalary) : "待设置"}
+              >
               <div className="formula-card">
                 <h3>工资构成</h3>
                 <div className="formula-list">
@@ -1062,6 +1080,7 @@ export function PayrollPage({
                   <p className="timeline__empty">当前记录没有保存计算追踪；旧月结快照仍按冻结金额展示。</p>
                 )}
               </div>
+              </DetailDisclosure>
 
               <div className="detail-card">
                 <h3>工资备注</h3>
@@ -1073,49 +1092,53 @@ export function PayrollPage({
                 />
               </div>
 
-              <div className="detail-card detail-card--compact">
-                <h3>门店规则</h3>
-                <ul className="rule-list">
-                  <li>稽核达标奖励：{formatCurrency(activeStore.config.auditPassedBonus)}</li>
-                  <li>稽核未达标保底：{formatCurrency(activeStore.config.auditFallbackBonus)}</li>
-                  <li>社保补助基数：{formatCurrency(activeStore.config.socialInsuranceBase)}</li>
-                  <li>饭补基数：{formatCurrency(activeStore.config.mealAllowanceBase)}</li>
-                  <li>
-                    夜班补贴：
-                    {activeStore.config.nightShiftRate > 0
-                      ? `${formatCurrency(activeStore.config.nightShiftRate)} / 小时`
-                      : "本店未启用"}
-                  </li>
-                </ul>
-              </div>
+              <DetailDisclosure title="门店规则与历史记录" description="查看工资规则、最近调薪和本月月结记录">
+                <div className="detail-disclosure__stack">
+                  <div className="detail-card detail-card--compact">
+                    <h3>门店规则</h3>
+                    <ul className="rule-list">
+                      <li>稽核达标奖励：{formatCurrency(activeStore.config.auditPassedBonus)}</li>
+                      <li>稽核未达标保底：{formatCurrency(activeStore.config.auditFallbackBonus)}</li>
+                      <li>社保补助基数：{formatCurrency(activeStore.config.socialInsuranceBase)}</li>
+                      <li>饭补基数：{formatCurrency(activeStore.config.mealAllowanceBase)}</li>
+                      <li>
+                        夜班补贴：
+                        {activeStore.config.nightShiftRate > 0
+                          ? `${formatCurrency(activeStore.config.nightShiftRate)} / 小时`
+                          : "本店未启用"}
+                      </li>
+                    </ul>
+                  </div>
 
-              <div className="detail-card">
-                <h3>最近调薪</h3>
-                <div className="timeline">
-                  {activeStore.adjustments.filter((record) => record.employeeId === selectedReviewRow.employee.id).length === 0 ? (
-                    <p className="timeline__empty">当前员工还没有调薪记录。</p>
-                  ) : (
-                    activeStore.adjustments
-                      .filter((record) => record.employeeId === selectedReviewRow.employee.id)
-                      .slice(0, 3)
-                      .map((record) => (
-                        <article key={record.id} className="timeline__item">
-                          <strong>{record.itemLabel}</strong>
-                          <span>
-                            {record.date} · {record.previousValue} → {record.newValue}
-                          </span>
-                          <p>{record.notes || "无备注"}</p>
-                        </article>
-                      ))
-                  )}
+                  <div className="detail-card">
+                    <h3>最近调薪</h3>
+                    <div className="timeline">
+                      {activeStore.adjustments.filter((record) => record.employeeId === selectedReviewRow.employee.id).length === 0 ? (
+                        <p className="timeline__empty">当前员工还没有调薪记录。</p>
+                      ) : (
+                        activeStore.adjustments
+                          .filter((record) => record.employeeId === selectedReviewRow.employee.id)
+                          .slice(0, 3)
+                          .map((record) => (
+                            <article key={record.id} className="timeline__item">
+                              <strong>{record.itemLabel}</strong>
+                              <span>
+                                {record.date} · {record.previousValue} → {record.newValue}
+                              </span>
+                              <p>{record.notes || "无备注"}</p>
+                            </article>
+                          ))
+                      )}
+                    </div>
+                  </div>
+                  <div className="detail-card">
+                    <h3>本月月结记录</h3>
+                    <div className="timeline">
+                      {monthlyStore.closeHistory.length === 0 ? <p className="timeline__empty">本月还没有月结或解锁记录。</p> : monthlyStore.closeHistory.slice().reverse().map((record) => <article className="timeline__item" key={record.id}><strong>{record.type === "closed" ? "完成月结" : "解锁工资"}</strong><span>{new Date(record.at).toLocaleString("zh-CN")}</span><p>{record.reason}</p></article>)}
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="detail-card">
-                <h3>本月月结记录</h3>
-                <div className="timeline">
-                  {monthlyStore.closeHistory.length === 0 ? <p className="timeline__empty">本月还没有月结或解锁记录。</p> : monthlyStore.closeHistory.slice().reverse().map((record) => <article className="timeline__item" key={record.id}><strong>{record.type === "closed" ? "完成月结" : "解锁工资"}</strong><span>{new Date(record.at).toLocaleString("zh-CN")}</span><p>{record.reason}</p></article>)}
-                </div>
-              </div>
+              </DetailDisclosure>
             </>
           ) : (
             <div className="detail-empty">当前门店还没有员工，请先新增员工。</div>

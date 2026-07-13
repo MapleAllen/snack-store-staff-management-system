@@ -54,12 +54,12 @@ import { loadWorkspace, saveWorkspace, getStorageStatus, isDesktopStorage } from
 
 const APP_VERSION = __APP_VERSION__;
 const NAV_ITEMS = [
-  { id: "home", label: "首页" },
+  { id: "home", label: "经营总览" },
   { id: "employees", label: "员工管理" },
   { id: "attendance", label: "考勤管理" },
   { id: "payroll", label: "工资管理" },
   { id: "reports", label: "报表中心" },
-  { id: "settings", label: "系统设置" },
+  { id: "settings", label: "门店设置" },
 ];
 
 function makeId(prefix) {
@@ -751,7 +751,7 @@ export function App() {
     <div className="app-shell">
       <main className="workspace">
         <header className="topbar">
-          <div className="topbar__brand"><img className="topbar__logo" src="/app-icon.svg" alt="" /><div><strong>门店工资助手</strong><span>老板结薪工作台</span></div></div>
+          <div className="topbar__brand"><img className="topbar__logo" src="/app-icon.svg" alt="" /><div><strong>门店工资助手</strong><span>人员与工资一站式管理</span></div></div>
           <nav className="topbar__nav" aria-label="主导航">
             {NAV_ITEMS.map((item) => <button key={item.id} aria-current={item.id === activePage ? "page" : undefined} className={item.id === activePage ? "topbar__nav-item is-active" : "topbar__nav-item"} type="button" onClick={() => setActivePage(item.id)}>{item.label}</button>)}
           </nav>

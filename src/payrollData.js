@@ -224,7 +224,7 @@ export function createDefaultMonthValue(date = new Date()) {
 
 export const VIEW_OPTIONS = [
   { id: "payroll", label: "本月工资" },
-  { id: "employees", label: "员工档案" },
+  { id: "employees", label: "薪资档案" },
   { id: "adjustments", label: "调薪记录" },
 ];
 
