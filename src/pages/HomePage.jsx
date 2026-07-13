@@ -6,6 +6,14 @@ import {
   getPayrollMonthCloseReadiness,
 } from "../payrollLogic.js";
 
+const CORE_FEATURES = [
+  { id: "employees", label: "员工管理", description: "入职、离职、调店与员工历史" },
+  { id: "attendance", label: "考勤管理", description: "录入加班、请假和稽核结果" },
+  { id: "payroll", label: "工资管理", description: "逐人确认、调整、月结与导出" },
+  { id: "reports", label: "报表中心", description: "查看预计、已确认和已月结金额" },
+  { id: "settings", label: "门店设置", description: "门店、工资规则、备份与恢复" },
+];
+
 export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) {
   const readiness = getPayrollMonthCloseReadiness(workspace, activeMonth);
   const storeSummaries = readiness.stores;
@@ -137,6 +145,19 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) 
         <StatCard label="已确认实发" value={formatCurrency(totalConfirmed)} hint={`${totalPending} 人待确认`} />
         <StatCard label="已月结实发" value={formatCurrency(totalClosed)} hint={`${closedStores}/${readiness.storeCount} 家门店完成`} accent={closedStores === readiness.storeCount ? "success" : "default"} />
         <StatCard label="月结阻塞" value={`${totalBlockers} 项`} hint={`待确认 ${totalPending} · 待设置 ${totalUnconfigured} · 输入有误 ${totalInvalid}`} accent={totalBlockers ? "warning" : "success"} />
+      </section>
+
+      <section className="panel page-panel quick-access-panel" aria-labelledby="quick-access-title">
+        <SectionHeading id="quick-access-title" eyebrow="快速上手" title="所有功能，两步内到达" description="先选功能，再在页面内完成操作；日常功能不藏在第三级菜单。" />
+        <div className="quick-access-grid">
+          {CORE_FEATURES.map((feature) => (
+            <button className="quick-access-card" key={feature.id} type="button" onClick={() => onNavigate(feature.id)}>
+              <strong>{feature.label}</strong>
+              <span>{feature.description}</span>
+              <small>打开功能</small>
+            </button>
+          ))}
+        </div>
       </section>
 
       <section className="dashboard-grid">

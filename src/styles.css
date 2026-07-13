@@ -47,6 +47,15 @@ button {
   cursor: pointer;
 }
 
+button:focus-visible,
+summary:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(164, 91, 15, 0.42);
+  outline-offset: 3px;
+}
+
 #root {
   min-height: 100vh;
 }
@@ -332,6 +341,7 @@ button {
     radial-gradient(circle at top right, rgba(18, 56, 71, 0.08), transparent 32%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 249, 252, 0.98));
   box-shadow: var(--shadow);
+  align-items: start;
 }
 
 .command-center__main h1,
@@ -364,6 +374,10 @@ button {
 .confidence-card__grid {
   display: grid;
   gap: 0.8rem;
+}
+
+.command-center__main {
+  align-content: start;
 }
 
 .command-center__digest {
@@ -403,6 +417,46 @@ button {
   margin-top: 0.2rem;
 }
 
+.quick-access-panel {
+  margin-top: 0.9rem;
+}
+
+.quick-access-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.quick-access-card {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel-strong);
+  color: var(--ink);
+  text-align: left;
+}
+
+.quick-access-card:hover {
+  border-color: rgba(18, 56, 71, 0.28);
+  background: var(--brand-soft);
+}
+
+.quick-access-card span,
+.quick-access-card small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.quick-access-card small {
+  margin-top: 0.2rem;
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .confidence-card {
   padding: 1rem;
   border: 1px solid rgba(18, 56, 71, 0.08);
@@ -418,7 +472,7 @@ button {
 }
 
 .confidence-card__grid {
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .confidence-card__item.is-warning {
@@ -442,6 +496,10 @@ button {
 .priority-checklist__items {
   display: grid;
   gap: 0.6rem;
+}
+
+.priority-checklist__items {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .blocker-digest__reason {
@@ -1405,6 +1463,72 @@ button {
   padding: 0.85rem 1rem;
 }
 
+.detail-disclosure {
+  margin-top: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.detail-disclosure > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.detail-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.detail-disclosure > summary::after {
+  content: "展开";
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.detail-disclosure[open] > summary::after {
+  content: "收起";
+}
+
+.detail-disclosure > summary span,
+.detail-disclosure > summary strong,
+.detail-disclosure > summary small {
+  display: block;
+}
+
+.detail-disclosure > summary small {
+  margin-top: 0.3rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.detail-disclosure > summary b {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.detail-disclosure__body {
+  padding: 0 1rem 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.detail-disclosure__body > .formula-card,
+.detail-disclosure__stack > .detail-card {
+  margin-top: 1rem;
+}
+
+.detail-disclosure__stack {
+  display: grid;
+  gap: 0;
+}
+
 .payroll-adjustments-card {
   display: grid;
   gap: 0.9rem;
@@ -1920,6 +2044,14 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .quick-access-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .priority-checklist__items {
+    grid-template-columns: 1fr;
+  }
+
   .topbar {
     grid-template-columns: 1fr;
   }
@@ -2105,6 +2237,18 @@ button {
   .report-row,
   .report-row--detailed {
     grid-template-columns: 1fr;
+  }
+
+  .quick-access-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-disclosure > summary {
+    align-items: flex-start;
+  }
+
+  .detail-disclosure > summary b {
+    margin-left: 0;
   }
 
   .profile-strip {
