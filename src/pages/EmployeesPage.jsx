@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Card, Table, Tag, Button, Space, Input, Select, Row, Col, Timeline, Typography, Avatar, Popconfirm } from "antd";
+import { Card, Table, Tag, Button, Space, Input, Select, Row, Col, Timeline, Typography, Avatar, Popconfirm, Drawer, Descriptions } from "antd";
 import {
   PlusOutlined,
   EditOutlined,
@@ -8,6 +8,7 @@ import {
   UserAddOutlined,
   SearchOutlined,
   UserOutlined,
+  HistoryOutlined,
 } from "@ant-design/icons";
 import { PageHeader } from "../components/PageHeader.jsx";
 import { SectionHeading } from "../components/SectionHeading.jsx";
@@ -18,6 +19,7 @@ const { Text, Title, Paragraph } = Typography;
 export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit, onToggleResignation, onTransfer }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [historyDrawerEmployee, setHistoryDrawerEmployee] = useState(null);
 
   const employees = getEmployeesWithStoreHistory(workspace, store.id);
   const storeMap = new Map(workspace.stores.map((item) => [item.id, item]));
@@ -47,7 +49,10 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
       dataIndex: ["employee", "name"],
       key: "name",
       render: (_, record) => (
-        <Space>
+        <Space
+          style={{ cursor: "pointer" }}
+          onClick={() => setHistoryDrawerEmployee(record.employee)}
+        >
           <Avatar style={{ backgroundColor: record.employee.isResigned ? "#d9d9d9" : "#1677ff" }}>
             {record.employee.name.slice(-1)}
           </Avatar>
@@ -123,8 +128,11 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
         const { employee, currentHere } = record;
         return (
           <Space wrap size="small">
+            <Button size="small" icon={<HistoryOutlined />} onClick={() => setHistoryDrawerEmployee(employee)}>
+              档案履历
+            </Button>
             <Button size="small" icon={<EditOutlined />} onClick={() => onEdit(employee)}>
-              编辑姓名
+              改名
             </Button>
             {currentHere && !employee.isResigned && (
               <Button size="small" icon={<SwapOutlined />} onClick={() => onTransfer(employee)}>
@@ -154,6 +162,9 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
   ];
 
   const storeAdjustments = workspace.adjustments.filter((record) => record.storeId === store.id);
+
+  const drawerAssignments = historyDrawerEmployee ? getEmployeeAssignments(workspace, historyDrawerEmployee.id) : [];
+  const drawerAdjustments = historyDrawerEmployee ? workspace.adjustments.filter((a) => a.employeeId === historyDrawerEmployee.id) : [];
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -235,6 +246,77 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
           </Card>
         </Col>
       </Row>
+
+      {/* 员工档案个人履历 Drawer */}
+      <Drawer
+        title={historyDrawerEmployee ? `${historyDrawerEmployee.name} - 档案个人履历` : "员工履历"}
+        placement="right"
+        width={480}
+        onClose={() => setHistoryDrawerEmployee(null)}
+        open={Boolean(historyDrawerEmployee)}
+      >
+        {historyDrawerEmployee && (
+          <Space direction="vertical" size="large" style={{ width: "100%" }}>
+            <Descriptions title="基本薪资组件" column={1} bordered size="small">
+              <Descriptions.Item label="员工姓名">{historyDrawerEmployee.name}</Descriptions.Item>
+              <Descriptions.Item label="工号">{historyDrawerEmployee.id}</Descriptions.Item>
+              <Descriptions.Item label="基础工资">{formatCurrency(historyDrawerEmployee.baseSalary)}</Descriptions.Item>
+              <Descriptions.Item label="加班时薪">{historyDrawerEmployee.overtimeRate} 元/小时</Descriptions.Item>
+              <Descriptions.Item label="全勤奖金">{formatCurrency(historyDrawerEmployee.attendanceBonus)}</Descriptions.Item>
+              <Descriptions.Item label="在职状态">
+                <Tag color={historyDrawerEmployee.isResigned ? "default" : "success"}>
+                  {historyDrawerEmployee.isResigned ? `已离职 (${historyDrawerEmployee.resignationDate})` : "在职"}
+                </Tag>
+              </Descriptions.Item>
+            </Descriptions>
+
+            <div>
+              <Title level={5}>门店任职调动轨迹</Title>
+              <Timeline
+                items={drawerAssignments.map((a) => ({
+                  color: a.storeId === store.id ? "green" : "blue",
+                  children: (
+                    <div>
+                      <Text strong>{storeMap.get(a.storeId)?.name ?? a.storeId}</Text>
+                      <br />
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {a.startMonth} 至 {a.endMonth ?? "现在"} · {a.note || "正常任职"}
+                      </Text>
+                    </div>
+                  ),
+                }))}
+              />
+            </div>
+
+            <div>
+              <Title level={5}>个人调薪变更历史</Title>
+              {drawerAdjustments.length === 0 ? (
+                <Text type="secondary">暂无个人调薪记录</Text>
+              ) : (
+                <Timeline
+                  items={drawerAdjustments.map((record) => ({
+                    color: "orange",
+                    children: (
+                      <div>
+                        <Text strong>{record.itemLabel}</Text>
+                        <br />
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {record.date} · {record.previousValue} → {record.newValue}
+                        </Text>
+                        {record.notes && (
+                          <Paragraph type="secondary" style={{ fontSize: 12, margin: "2px 0 0 0" }}>
+                            {record.notes}
+                          </Paragraph>
+                        )}
+                      </div>
+                    ),
+                  }))}
+                />
+              )}
+            </div>
+          </Space>
+        )}
+      </Drawer>
     </Space>
   );
 }

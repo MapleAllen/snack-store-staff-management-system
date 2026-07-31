@@ -20,6 +20,7 @@ import {
   Switch,
   Divider,
   Popconfirm,
+  Popover,
 } from "antd";
 import {
   CheckCircleOutlined,
@@ -33,7 +34,9 @@ import {
   CalendarOutlined,
   PayCircleOutlined,
   InfoCircleOutlined,
+  CalculatorOutlined,
 } from "@ant-design/icons";
+
 import { StatCard } from "../components/StatCard.jsx";
 import { SectionHeading } from "../components/SectionHeading.jsx";
 import {
@@ -60,54 +63,11 @@ const ENTRY_FIELD_LABELS = {
   specialAdjustment: "特殊加减项",
 };
 
-const TRACE_GROUPS = [
-  { id: "base", label: "基础项" },
-  { id: "deduction", label: "扣减追踪" },
-  { id: "addition", label: "增加追踪" },
-  { id: "total", label: "实发汇总" },
-];
-
-const TRACE_SOURCE_LABELS = {
-  "employee.baseSalary": "员工基础工资",
-  "employee.overtimeRate": "员工加班时薪",
-  "employee.attendanceBonus": "员工全勤奖金",
-  "entry.overtimeHours": "本月加班时长",
-  "entry.leaveDays": "本月请假天数",
-  "entry.leaveHours": "本月请假小时",
-  "entry.nightShiftHours": "本月夜班时长",
-  "entry.auditPassed": "本月稽核状态",
-  "entry.specialAdjustment": "本月特殊加减项",
-  "entry.payrollAdjustments": "结构化一次性工资调整",
-  "config.leaveDaysDivisor": "门店请假天数除数",
-  "config.leaveHoursDivisor": "门店请假小时除数",
-  "config.monthDays": "门店每月计薪天数",
-  "config.nightShiftRate": "门店夜班补贴",
-  "config.auditPassedBonus": "门店稽核达标奖励",
-  "config.auditFallbackBonus": "门店稽核未达标保底",
-  "config.socialInsuranceBase": "门店社保补助基数",
-  "config.mealAllowanceBase": "门店饭补基数",
-  "breakdown.leaveDaysDeduction": "请假天数扣减结果",
-  "breakdown.leaveHoursDeduction": "请假小时扣减结果",
-  "breakdown.overtimePay": "加班工资结果",
-  "breakdown.nightShiftPay": "夜班补贴结果",
-  "breakdown.attendancePay": "全勤奖金结果",
-  "breakdown.auditPay": "稽核奖金结果",
-  "breakdown.socialInsurance": "社保补助结果",
-  "breakdown.mealAllowance": "饭补结果",
-  "breakdown.specialAdjustment": "特殊加减项结果",
-};
-
 const PAYROLL_ADJUSTMENT_CATEGORIES = [
   { value: "bonus", label: "奖金" },
   { value: "deduction", label: "扣款" },
   { value: "reimbursement", label: "报销" },
   { value: "correction", label: "修正" },
-];
-
-const PAYROLL_ADJUSTMENT_STATUSES = [
-  { value: "approved", label: "已批准" },
-  { value: "pending", label: "待审批" },
-  { value: "rejected", label: "已驳回" },
 ];
 
 const DEFAULT_PAYROLL_ADJUSTMENT_DRAFT = {
@@ -134,9 +94,22 @@ function getOptionLabel(options, value) {
   return options.find((option) => option.value === value)?.label ?? value;
 }
 
-function getAdjustmentImpact(adjustment) {
-  const amount = Number(adjustment?.amount) || 0;
-  return adjustment?.category === "deduction" ? -amount : amount;
+function renderFormulaTooltip(row) {
+  if (!row.employee.salaryConfigured) return "尚未设置初始薪资组件";
+  const b = row.breakdown;
+  return (
+    <div style={{ fontSize: 12, lineHeight: 1.7, padding: 4 }}>
+      <div style={{ fontWeight: "bold", marginBottom: 4 }}>🧮 算薪公式拆解明细</div>
+      <div>· 基础工资: {formatCurrency(row.employee.baseSalary)}</div>
+      <div>· 加班工资: {row.employee.overtimeRate}元/时 × {row.entry.overtimeHours}时 = +{formatCurrency(b.overtimePay)}</div>
+      <div>· 请假扣款: -{formatCurrency(b.leaveDaysDeduction + b.leaveHoursDeduction)}</div>
+      <div>· 全勤/稽核: +{formatCurrency(b.attendancePay + b.auditPay)}</div>
+      <div>· 社保/饭补: +{formatCurrency(b.socialInsurance + b.mealAllowance)}</div>
+      {b.specialAdjustment !== 0 && <div>· 特殊调整: {b.specialAdjustment > 0 ? "+" : ""}{formatCurrency(b.specialAdjustment)}</div>}
+      <Divider style={{ margin: "6px 0", borderColor: "#e8e8e8" }} />
+      <div><Text type="primary" strong>实发小计: {formatCurrency(b.netSalary)}</Text></div>
+    </div>
+  );
 }
 
 export function PayrollPage({
@@ -172,7 +145,6 @@ export function PayrollPage({
 
   const blockerRows = payrollRows.filter((row) => row.closeBlockers.length > 0);
   const reviewRows = payrollRows.filter((row) => row.employee.salaryConfigured && row.issueItems.length > 0);
-  const cleanRows = payrollRows.filter((row) => row.employee.salaryConfigured && row.closeBlockers.length === 0 && row.issueItems.length === 0);
 
   const visiblePayrollRows = payrollRows.filter((row) => {
     if (searchTerm && !row.employee.name.includes(searchTerm.trim())) return false;
@@ -232,6 +204,14 @@ export function PayrollPage({
     if (!selectedRow) return;
     const nextList = getPayrollAdjustments(selectedRow.entry).filter((item) => item.id !== id);
     patchMonthlyEntry(selectedRow.employee.id, { payrollAdjustments: nextList });
+  }
+
+  function handleConfirmAll() {
+    payrollRows.forEach((row) => {
+      if (!row.entry.isComplete && row.employee.salaryConfigured && row.closeBlockers.length === 0) {
+        toggleEntryComplete(row.employee.id, true);
+      }
+    });
   }
 
   const columns = [
@@ -375,11 +355,14 @@ export function PayrollPage({
     {
       title: "实发工资",
       key: "netSalary",
-      width: 120,
+      width: 130,
       render: (_, record) => (
-        <Text strong style={{ color: record.employee.salaryConfigured ? "#1677ff" : "#fa8c16" }}>
-          {record.employee.salaryConfigured ? formatCurrency(record.breakdown.netSalary) : "待设置"}
-        </Text>
+        <Popover content={renderFormulaTooltip(record)} title={record.employee.name} trigger="hover">
+          <Text strong style={{ color: record.employee.salaryConfigured ? "#1677ff" : "#fa8c16", cursor: "pointer" }}>
+            {record.employee.salaryConfigured ? formatCurrency(record.breakdown.netSalary) : "待设置"}
+            <CalculatorOutlined style={{ fontSize: 11, marginLeft: 4, color: "#8c8c8c" }} />
+          </Text>
+        </Popover>
       ),
     },
   ];
@@ -475,17 +458,22 @@ export function PayrollPage({
             title="算薪主工作台"
             extra={
               <Space wrap>
+                {!isLocked && blockerRows.length === 0 && (
+                  <Button size="small" type="primary" ghost icon={<CheckCircleOutlined />} onClick={handleConfirmAll}>
+                    一键全员确认完成
+                  </Button>
+                )}
                 <Input
                   placeholder="搜索员工"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  style={{ width: 140 }}
+                  style={{ width: 130 }}
                   allowClear
                 />
                 <Select
                   value={viewFilter}
                   onChange={setViewFilter}
-                  style={{ width: 120 }}
+                  style={{ width: 110 }}
                   options={[
                     { value: "all", label: "全部员工" },
                     { value: "pending", label: "待确认" },
@@ -547,9 +535,11 @@ export function PayrollPage({
                     {formatCurrency(selectedRow.breakdown.socialInsurance + selectedRow.breakdown.mealAllowance)}
                   </Descriptions.Item>
                   <Descriptions.Item label="实发工资">
-                    <Text strong style={{ fontSize: 16, color: "#1677ff" }}>
-                      {selectedRow.employee.salaryConfigured ? formatCurrency(selectedRow.breakdown.netSalary) : "待设置"}
-                    </Text>
+                    <Popover content={renderFormulaTooltip(selectedRow)} title={selectedRow.employee.name} trigger="hover">
+                      <Text strong style={{ fontSize: 16, color: "#1677ff", cursor: "pointer" }}>
+                        {selectedRow.employee.salaryConfigured ? formatCurrency(selectedRow.breakdown.netSalary) : "待设置"} 🧮
+                      </Text>
+                    </Popover>
                   </Descriptions.Item>
                 </Descriptions>
 

@@ -1,4 +1,4 @@
-import { Card, Table, InputNumber, Input, Button, Tag, Row, Col, Alert, Space, Tooltip, Typography, Switch } from "antd";
+import { Card, Table, InputNumber, Input, Button, Tag, Row, Col, Alert, Space, Tooltip, Typography, Switch, Popconfirm } from "antd";
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -7,6 +7,8 @@ import {
   CalendarOutlined,
   FileDoneOutlined,
   LockOutlined,
+  ClearOutlined,
+  WarningOutlined,
 } from "@ant-design/icons";
 import { PageHeader } from "../components/PageHeader.jsx";
 import { StatCard } from "../components/StatCard.jsx";
@@ -18,6 +20,18 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
   const totalOvertime = rows.reduce((sum, row) => sum + row.breakdown.overtimeHours, 0);
   const totalLeaveDays = rows.reduce((sum, row) => sum + row.breakdown.leaveDays, 0);
   const qualified = rows.filter((row) => row.entry.auditPassed).length;
+
+  function handleBatchAuditPass() {
+    rows.forEach((row) => {
+      patchEntry(row.employee.id, { auditPassed: true });
+    });
+  }
+
+  function handleBatchClearLeave() {
+    rows.forEach((row) => {
+      patchEntry(row.employee.id, { leaveDays: 0, leaveHours: 0 });
+    });
+  }
 
   const columns = [
     {
@@ -46,31 +60,45 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
       title: "请假天数",
       key: "leaveDays",
       width: 120,
-      render: (_, record) => (
-        <InputNumber
-          disabled={isLocked}
-          min={0}
-          step={0.5}
-          value={record.entry.leaveDays}
-          onChange={(val) => patchEntry(record.employee.id, { leaveDays: val ?? 0 })}
-          style={{ width: "100%" }}
-        />
-      ),
+      render: (_, record) => {
+        const val = record.entry.leaveDays;
+        const isExcess = val > 31;
+        return (
+          <Tooltip title={isExcess ? "提示：请假天数大于 31 天，请确认是否误输入" : ""}>
+            <InputNumber
+              disabled={isLocked}
+              min={0}
+              step={0.5}
+              status={isExcess ? "warning" : ""}
+              value={val}
+              onChange={(v) => patchEntry(record.employee.id, { leaveDays: v ?? 0 })}
+              style={{ width: "100%" }}
+            />
+          </Tooltip>
+        );
+      },
     },
     {
       title: "请假小时",
       key: "leaveHours",
       width: 120,
-      render: (_, record) => (
-        <InputNumber
-          disabled={isLocked}
-          min={0}
-          step={0.5}
-          value={record.entry.leaveHours}
-          onChange={(val) => patchEntry(record.employee.id, { leaveHours: val ?? 0 })}
-          style={{ width: "100%" }}
-        />
-      ),
+      render: (_, record) => {
+        const val = record.entry.leaveHours;
+        const isExcess = val > 200;
+        return (
+          <Tooltip title={isExcess ? "提示：请假小时较大，建议换算为请假天数" : ""}>
+            <InputNumber
+              disabled={isLocked}
+              min={0}
+              step={0.5}
+              status={isExcess ? "warning" : ""}
+              value={val}
+              onChange={(v) => patchEntry(record.employee.id, { leaveHours: v ?? 0 })}
+              style={{ width: "100%" }}
+            />
+          </Tooltip>
+        );
+      },
     },
     ...(store.config.nightShiftRate > 0
       ? [
@@ -168,7 +196,7 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
           showIcon
           icon={<LockOutlined />}
           message="当前月份已月结封账"
-          description="如需修考勤数据，请先在“工资管理”中提交解锁原因。"
+          description="如需修改考勤数据，请先在“工资管理”中提交解锁原因。"
         />
       )}
 
@@ -187,7 +215,24 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
         </Col>
       </Row>
 
-      <Card title="本月考勤录入明细" style={{ borderRadius: 8 }}>
+      <Card
+        title="本月考勤录入明细"
+        extra={
+          !isLocked && (
+            <Space wrap>
+              <Button size="small" icon={<CheckCircleOutlined />} onClick={handleBatchAuditPass}>
+                一键全员稽核达标
+              </Button>
+              <Popconfirm title="确定清空所有员工的请假记录？" onConfirm={handleBatchClearLeave}>
+                <Button size="small" icon={<ClearOutlined />}>
+                  清空请假记录
+                </Button>
+              </Popconfirm>
+            </Space>
+          )
+        }
+        style={{ borderRadius: 8 }}
+      >
         <Table
           columns={columns}
           dataSource={rows}
