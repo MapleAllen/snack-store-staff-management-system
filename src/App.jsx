@@ -77,8 +77,9 @@ import {
   WarningOutlined,
 } from "@ant-design/icons";
 
-const { Header, Content } = Layout;
+const { Header, Content, Sider } = Layout;
 const { Text } = Typography;
+
 
 const APP_VERSION = __APP_VERSION__;
 const NAV_ITEMS = [
@@ -158,7 +159,9 @@ export function App() {
   const [activeStoreId, setActiveStoreId] = useState("");
   const [activeMonth, setActiveMonth] = useState(currentMonth);
   const [activePage, setActivePage] = useState("home");
+  const [collapsed, setCollapsed] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+
   const [notice, setNotice] = useState("");
   const [employeeModal, setEmployeeModal] = useState(null);
   const [adjustmentModal, setAdjustmentModal] = useState(null);
@@ -778,72 +781,111 @@ export function App() {
 
   return (
     <>
-      <Layout style={{ minHeight: "100vh", background: "#f0f2f5" }}>
-        <Header
+      <Layout style={{ minHeight: "100vh" }}>
+        <Sider
+          collapsible
+          collapsed={collapsed}
+          onCollapse={(value) => setCollapsed(value)}
+          theme="dark"
+          width={220}
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "0 24px",
-            background: "#001529",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            position: "sticky",
+            overflow: "auto",
+            height: "100vh",
+            position: "fixed",
+            left: 0,
             top: 0,
-            zIndex: 1000,
+            bottom: 0,
+            zIndex: 1001,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <img src="/app-icon.svg" alt="" style={{ width: 32, height: 32 }} />
-            <div style={{ color: "#fff", lineHeight: 1.2 }}>
-              <strong style={{ fontSize: 16, display: "block", color: "#fff" }}>门店工资助手</strong>
-              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.65)" }}>人员与工资一站式管理</span>
-            </div>
+          <div
+            style={{
+              height: 64,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: collapsed ? "center" : "flex-start",
+              padding: collapsed ? "0" : "0 20px",
+              gap: 12,
+              background: "#002140",
+              overflow: "hidden",
+            }}
+          >
+            <img src="/app-icon.svg" alt="logo" style={{ width: 32, height: 32, flexShrink: 0 }} />
+            {!collapsed && (
+              <div style={{ color: "#fff", lineHeight: 1.2, whiteSpace: "nowrap" }}>
+                <strong style={{ fontSize: 16, display: "block", color: "#fff" }}>门店工资助手</strong>
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.65)" }}>人员与工资一站式管理</span>
+              </div>
+            )}
           </div>
 
           <Menu
             theme="dark"
-            mode="horizontal"
+            mode="inline"
             selectedKeys={[activePage]}
             onClick={({ key }) => setActivePage(key)}
             items={NAV_ITEMS}
-            style={{ flex: 1, minWidth: 0, justifyContent: "center", borderBottom: "none" }}
+            style={{ borderRight: 0, marginTop: 8 }}
           />
+        </Sider>
 
-          <Space size="middle">
-            <Select
-              aria-label="当前门店"
-              value={activeStore.id}
-              onChange={(val) => setActiveStoreId(val)}
-              style={{ width: 160 }}
-              options={activeStores.map((s) => ({ value: s.id, label: s.name }))}
-              prefix={<ShopOutlined />}
-            />
-            {saveState.status === "error" ? (
-              <Tag color="error">保存失败</Tag>
-            ) : (
-              <Tag color="success" icon={<CheckCircleOutlined />}>
-                {saveState.savedAt ? formatTimestamp(saveState.savedAt) : "自动保存"}
-              </Tag>
-            )}
-            <Tooltip title="锁定应用">
-              <Button
-                type="text"
-                icon={<LockOutlined style={{ color: "#fff" }} />}
-                onClick={() => setAppLocked(true)}
+        <Layout style={{ marginLeft: collapsed ? 80 : 220, transition: "all 0.2s", background: "#f0f2f5" }}>
+          <Header
+            style={{
+              padding: "0 24px",
+              background: "#fff",
+              boxShadow: "0 1px 4px rgba(0,21,41,0.08)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              position: "sticky",
+              top: 0,
+              zIndex: 1000,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <Typography.Title level={4} style={{ margin: 0 }}>
+                {currentFeature?.label}
+              </Typography.Title>
+            </div>
+
+            <Space size="middle">
+              <Select
+                aria-label="当前门店"
+                value={activeStore.id}
+                onChange={(val) => setActiveStoreId(val)}
+                style={{ width: 160 }}
+                options={activeStores.map((s) => ({ value: s.id, label: s.name }))}
+                prefix={<ShopOutlined />}
               />
-            </Tooltip>
-          </Space>
-        </Header>
+              {saveState.status === "error" ? (
+                <Tag color="error">保存失败</Tag>
+              ) : (
+                <Tag color="success" icon={<CheckCircleOutlined />}>
+                  {saveState.savedAt ? formatTimestamp(saveState.savedAt) : "自动保存"}
+                </Tag>
+              )}
+              <Tooltip title="锁定应用">
+                <Button
+                  type="text"
+                  icon={<LockOutlined />}
+                  onClick={() => setAppLocked(true)}
+                />
+              </Tooltip>
+            </Space>
+          </Header>
 
-        <Content style={{ padding: "24px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
-          {activePage === "home" ? <HomePage workspace={workspace} activeMonth={activeMonth} onNavigate={setActivePage} onSelectStore={setActiveStoreId} /> : null}
-          {activePage === "employees" ? <EmployeesPage workspace={workspace} store={activeStore} currentMonth={currentMonth} onCreate={() => setEmployeeModal({ mode: "create", draft: createEmployeeDraft() })} onEdit={(employee) => setEmployeeModal({ mode: "edit", employeeId: employee.id, draft: createEmployeeDraft(employee) })} onToggleResignation={handleToggleResignation} onTransfer={openTransferModal} /> : null}
-          {activePage === "attendance" ? <AttendancePage store={activeStore} activeMonth={activeMonth} rows={payrollRows} patchEntry={patchMonthlyEntry} toggleComplete={toggleEntryComplete} isLocked={isLocked} onNavigate={setActivePage} /> : null}
-          {activePage === "reports" ? <ReportsPage workspace={workspace} activeMonth={activeMonth} setActiveMonth={setActiveMonth} onSelectStore={setActiveStoreId} onNavigate={setActivePage} /> : null}
-          {activePage === "settings" ? <SettingsPage store={activeStore} stores={workspace.stores} patchConfig={patchStoreConfig} appVersion={APP_VERSION} onExportBackup={exportWorkspaceBackup} onImportBackup={prepareWorkspaceRestore} onCreateStore={() => setStoreModal({ mode: "create", name: "" })} onEditStore={(store) => setStoreModal({ mode: "edit", storeId: store.id, name: store.name })} onArchiveStore={requestArchiveStore} onRestoreStore={restoreStore} autoBackups={autoBackups} autoBackupAvailable={Boolean(desktopApi)} autoBackupBusy={autoBackupBusy} onCreateAutoBackup={() => createAutomaticBackup(BACKUP_REASONS.MANUAL)} onRestoreAutoBackup={prepareAutomaticRestore} onRequestLock={() => setAppLocked(true)} onResetDemoWorkspace={() => setDemoResetModal(true)} ruleHistory={(workspace.ruleHistory ?? []).filter((record) => record.storeId === activeStore.id)} /> : null}
-          {activePage === "payroll" ? <PayrollPage activeStore={activeStoreView} activeMonth={activeMonth} setActiveMonth={setActiveMonth} exportCurrentMonth={exportCurrentMonth} totalNetSalary={totalNetSalary} forecastNetSalary={forecastNetSalary} payrollRows={payrollRows} touchedRows={touchedRows} exceptionCount={exceptionCount} completionRate={completionRate} monthlyStore={monthlyStore} selectedRow={selectedRow} setSelectedEmployeeId={setSelectedEmployeeId} patchMonthlyEntry={patchMonthlyEntry} toggleEntryComplete={toggleEntryComplete} setEmployeeModal={setEmployeeModal} openAdjustmentModal={openAdjustmentModal} isLocked={isLocked} onClosePayroll={requestClosePayroll} onUnlockPayroll={() => setUnlockModal({ reason: "" })} /> : null}
-        </Content>
+          <Content style={{ padding: "24px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
+            {activePage === "home" ? <HomePage workspace={workspace} activeMonth={activeMonth} onNavigate={setActivePage} onSelectStore={setActiveStoreId} /> : null}
+            {activePage === "employees" ? <EmployeesPage workspace={workspace} store={activeStore} currentMonth={currentMonth} onCreate={() => setEmployeeModal({ mode: "create", draft: createEmployeeDraft() })} onEdit={(employee) => setEmployeeModal({ mode: "edit", employeeId: employee.id, draft: createEmployeeDraft(employee) })} onToggleResignation={handleToggleResignation} onTransfer={openTransferModal} /> : null}
+            {activePage === "attendance" ? <AttendancePage store={activeStore} activeMonth={activeMonth} rows={payrollRows} patchEntry={patchMonthlyEntry} toggleComplete={toggleEntryComplete} isLocked={isLocked} onNavigate={setActivePage} /> : null}
+            {activePage === "reports" ? <ReportsPage workspace={workspace} activeMonth={activeMonth} setActiveMonth={setActiveMonth} onSelectStore={setActiveStoreId} onNavigate={setActivePage} /> : null}
+            {activePage === "settings" ? <SettingsPage store={activeStore} stores={workspace.stores} patchConfig={patchStoreConfig} appVersion={APP_VERSION} onExportBackup={exportWorkspaceBackup} onImportBackup={prepareWorkspaceRestore} onCreateStore={() => setStoreModal({ mode: "create", name: "" })} onEditStore={(store) => setStoreModal({ mode: "edit", storeId: store.id, name: store.name })} onArchiveStore={requestArchiveStore} onRestoreStore={restoreStore} autoBackups={autoBackups} autoBackupAvailable={Boolean(desktopApi)} autoBackupBusy={autoBackupBusy} onCreateAutoBackup={() => createAutomaticBackup(BACKUP_REASONS.MANUAL)} onRestoreAutoBackup={prepareAutomaticRestore} onRequestLock={() => setAppLocked(true)} onResetDemoWorkspace={() => setDemoResetModal(true)} ruleHistory={(workspace.ruleHistory ?? []).filter((record) => record.storeId === activeStore.id)} /> : null}
+            {activePage === "payroll" ? <PayrollPage activeStore={activeStoreView} activeMonth={activeMonth} setActiveMonth={setActiveMonth} exportCurrentMonth={exportCurrentMonth} totalNetSalary={totalNetSalary} forecastNetSalary={forecastNetSalary} payrollRows={payrollRows} touchedRows={touchedRows} exceptionCount={exceptionCount} completionRate={completionRate} monthlyStore={monthlyStore} selectedRow={selectedRow} setSelectedEmployeeId={setSelectedEmployeeId} patchMonthlyEntry={patchMonthlyEntry} toggleEntryComplete={toggleEntryComplete} setEmployeeModal={setEmployeeModal} openAdjustmentModal={openAdjustmentModal} isLocked={isLocked} onClosePayroll={requestClosePayroll} onUnlockPayroll={() => setUnlockModal({ reason: "" })} /> : null}
+          </Content>
+        </Layout>
       </Layout>
+
 
       {notice ? <div className="toast" role="status" aria-live="polite">{notice}</div> : null}
 
