@@ -1,6 +1,23 @@
 import { useEffect, useRef, useState } from "react";
+import { Card, Form, InputNumber, Input, Button, Tag, Popconfirm, Upload, List, Space, Row, Col, Timeline, Typography, Alert } from "antd";
+import {
+  ShopOutlined,
+  EditOutlined,
+  StopOutlined,
+  ReloadOutlined,
+  SafetyCertificateOutlined,
+  LockOutlined,
+  UnlockOutlined,
+  ExportOutlined,
+  ImportOutlined,
+  CloudUploadOutlined,
+  HistoryOutlined,
+  SettingOutlined,
+} from "@ant-design/icons";
 import { PageHeader } from "../components/PageHeader.jsx";
 import { SectionHeading } from "../components/SectionHeading.jsx";
+
+const { Text, Title, Paragraph } = Typography;
 
 export function SettingsPage({
   store, stores, patchConfig, appVersion, onExportBackup, onImportBackup,
@@ -36,16 +53,16 @@ export function SettingsPage({
   ];
 
   useEffect(() => {
-    setDrafts(Object.fromEntries(configFields.map(([key]) => [key, `${store.config[key]}`])));
+    setDrafts(Object.fromEntries(configFields.map(([key]) => [key, store.config[key]])));
     setErrors({});
   }, [store.id]);
 
-  function commitConfig(key) {
-    const value = Number(drafts[key]);
+  function commitConfig(key, rawValue) {
+    const value = Number(rawValue);
     const error = patchConfig(key, value);
     if (error) {
       setErrors((current) => ({ ...current, [key]: error }));
-      setDrafts((current) => ({ ...current, [key]: `${store.config[key]}` }));
+      setDrafts((current) => ({ ...current, [key]: store.config[key] }));
       return;
     }
     setErrors((current) => ({ ...current, [key]: "" }));
@@ -94,137 +111,216 @@ export function SettingsPage({
   }
 
   return (
-    <>
-      <PageHeader eyebrow="门店设置" title="门店、工资规则与数据安全" description="常用设置集中在这一页，不需要进入更深的菜单。" actions={<button className="primary-button" type="button" onClick={onCreateStore}>新增门店</button>} />
-      <section className="panel page-panel">
-        <SectionHeading eyebrow="门店管理" title="营业与历史门店" description="停用门店不会删除员工或历史工资。" />
-        <div className="store-management-grid">
+    <Space direction="vertical" size="large" style={{ width: "100%" }}>
+      <PageHeader
+        eyebrow="门店设置"
+        title="门店、算薪规则与数据安全"
+        description="集中维护门店列表、本金计算参数、访问密码与离线数据备份。"
+        actions={
+          <Button type="primary" size="large" icon={<ShopOutlined />} onClick={onCreateStore}>
+            新增门店
+          </Button>
+        }
+      />
+
+      <Card title="门店管理 (营业与停用)" style={{ borderRadius: 8 }}>
+        <Row gutter={[16, 16]}>
           {stores.map((item) => (
-            <article className={item.status === "archived" ? "store-management-card is-archived" : "store-management-card"} key={item.id}>
-              <div><span className={`status-badge status-badge--${item.status === "active" ? "success" : "idle"}`}>{item.status === "active" ? "营业中" : "已停用"}</span><strong>{item.name}</strong>{item.id === store.id ? <small>当前选择</small> : null}</div>
-              <div className="store-management-card__actions"><button className="secondary-button" type="button" onClick={() => onEditStore(item)}>改名</button>{item.status === "active" ? <button className="danger-button" type="button" onClick={() => onArchiveStore(item)}>停用</button> : <button className="primary-button" type="button" onClick={() => onRestoreStore(item.id)}>恢复营业</button>}</div>
-            </article>
+            <Col xs={24} sm={12} md={8} key={item.id}>
+              <Card
+                size="small"
+                style={{
+                  borderRadius: 8,
+                  borderColor: item.id === store.id ? "#1677ff" : undefined,
+                  background: item.status === "archived" ? "#fafafa" : "#fff",
+                }}
+                title={
+                  <Space>
+                    <Text strong>{item.name}</Text>
+                    {item.id === store.id && <Tag color="blue">当前</Tag>}
+                  </Space>
+                }
+                extra={
+                  <Tag color={item.status === "active" ? "success" : "default"}>
+                    {item.status === "active" ? "营业中" : "已停用"}
+                  </Tag>
+                }
+              >
+                <Space wrap style={{ marginTop: 8 }}>
+                  <Button size="small" icon={<EditOutlined />} onClick={() => onEditStore(item)}>
+                    改名
+                  </Button>
+                  {item.status === "active" ? (
+                    <Popconfirm title="确定停用该门店？历史工资将保持只读可查。" onConfirm={() => onArchiveStore(item)}>
+                      <Button size="small" danger icon={<StopOutlined />}>
+                        停用
+                      </Button>
+                    </Popconfirm>
+                  ) : (
+                    <Button size="small" type="primary" ghost icon={<ReloadOutlined />} onClick={() => onRestoreStore(item.id)}>
+                      恢复营业
+                    </Button>
+                  )}
+                </Space>
+              </Card>
+            </Col>
           ))}
-        </div>
-      </section>
-      <section className="settings-layout">
-        <div className="panel page-panel">
-          <SectionHeading eyebrow="工资规则" title={`${store.name}计算参数`} description="离开输入框时保存；已月结结果继续冻结。" />
-          <div className="settings-grid">
-            {configFields.map(([key, label, hint, min]) => (
-              <label className="setting-field" key={key}>
-                <span>{label}</span>
-                <input type="number" step="0.5" min={min} value={drafts[key] ?? ""} aria-invalid={Boolean(errors[key])} onChange={(event) => setDrafts((current) => ({ ...current, [key]: event.target.value }))} onBlur={() => commitConfig(key)} />
-                <small className={errors[key] ? "field-error" : ""}>{errors[key] || hint}</small>
-              </label>
-            ))}
-          </div>
-          <div className="history-panel">
-            <SectionHeading eyebrow="规则记录" title="最近规则变更" description="保留当前门店参数修改记录。" />
-            <div className="timeline">{ruleHistory.length === 0 ? <p className="timeline__empty">当前门店还没有规则变更。</p> : ruleHistory.slice(0, 8).map((record) => <article className="timeline__item" key={record.id}><strong>{record.label}</strong><span>{new Date(record.at).toLocaleString("zh-CN")} · {record.previousValue} → {record.newValue}</span></article>)}</div>
-          </div>
-        </div>
-        <aside className="panel page-panel">
-          <SectionHeading eyebrow="计算逻辑" title="当前公式" description="系统使用统一公式，并读取本店参数。" />
-          <div className="formula-explainer"><strong>实发工资</strong><span>= 基础工资</span><span>- 请假天数 / 小时扣减</span><span>+ 加班工资 / 夜班补贴</span><span>+ 全勤 / 稽核奖励</span><span>+ 固定社保补助 / 饭补</span><span>+ 特殊加减项</span></div>
-          {desktopApi ? (
-            <div className="backup-panel">
-              <SectionHeading eyebrow="数据安全" title="应用访问锁" description="设置 4-6 位 PIN 后，每次启动需输入 PIN 才能进入工作区。" />
-              <div className="pin-status">
-                <span className={`status-badge status-badge--${lockPinSet ? "success" : "idle"}`}>{lockPinSet ? "PIN 已设置" : "PIN 未设置"}</span>
-                <div className="backup-actions">
+        </Row>
+      </Card>
+
+      <Row gutter={[24, 24]}>
+        <Col xs={24} lg={14}>
+          <Card title={`${store.name} 薪酬计算参数`} style={{ borderRadius: 8 }}>
+            <Row gutter={[16, 16]}>
+              {configFields.map(([key, label, hint, min]) => (
+                <Col xs={24} sm={12} key={key}>
+                  <Form.Item
+                    label={label}
+                    help={errors[key] || hint}
+                    validateStatus={errors[key] ? "error" : ""}
+                    style={{ marginBottom: 12 }}
+                  >
+                    <InputNumber
+                      min={min}
+                      step={0.5}
+                      style={{ width: "100%" }}
+                      value={drafts[key] ?? store.config[key]}
+                      onChange={(val) => setDrafts((current) => ({ ...current, [key]: val }))}
+                      onBlur={() => commitConfig(key, drafts[key])}
+                    />
+                  </Form.Item>
+                </Col>
+              ))}
+            </Row>
+          </Card>
+
+          <Card title="规则变更历史记录" style={{ borderRadius: 8, marginTop: 24 }}>
+            {ruleHistory.length === 0 ? (
+              <Text type="secondary">当前门店还没有规则变更。</Text>
+            ) : (
+              <Timeline
+                items={ruleHistory.slice(0, 8).map((record) => ({
+                  color: "gray",
+                  children: (
+                    <div>
+                      <Text strong>{record.label}</Text>
+                      <br />
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {new Date(record.at).toLocaleString("zh-CN")} · {record.previousValue} → {record.newValue}
+                      </Text>
+                    </div>
+                  ),
+                }))}
+              />
+            )}
+          </Card>
+        </Col>
+
+        <Col xs={24} lg={10}>
+          <Card title="计算公式与数据安全" style={{ borderRadius: 8 }}>
+            <Alert
+              type="info"
+              message="统一算薪公式"
+              description={
+                <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+                  <strong>实发工资</strong> = 基础工资 - 请假扣减 + 加班工资/夜班补贴 + 全勤/稽核奖励 + 固定社保/饭补 + 特殊调整
+                </div>
+              }
+              style={{ marginBottom: 20 }}
+            />
+
+            {desktopApi && (
+              <div style={{ marginBottom: 20 }}>
+                <Text strong style={{ display: "block", marginBottom: 8 }}>应用访问保护锁</Text>
+                <Space wrap align="center">
+                  <Tag color={lockPinSet ? "success" : "default"}>
+                    {lockPinSet ? "PIN 已设置" : "PIN 未设置"}
+                  </Tag>
                   {lockPinSet ? (
                     <>
-                      <button className="secondary-button" type="button" onClick={() => setPinModal({ mode: "set", pin: "", confirmPin: "", oldPin: "" })}>修改 PIN</button>
-                      <button className="secondary-button" type="button" onClick={() => setPinModal({ mode: "clear", pin: "", confirmPin: "", oldPin: "" })}>清除 PIN</button>
-                      <button className="secondary-button" type="button" onClick={handleManualLock}>立即锁定</button>
+                      <Button size="small" onClick={() => setPinModal({ mode: "set", pin: "", confirmPin: "", oldPin: "" })}>修改 PIN</Button>
+                      <Button size="small" onClick={() => setPinModal({ mode: "clear", pin: "", confirmPin: "", oldPin: "" })}>清除 PIN</Button>
+                      <Button size="small" icon={<LockOutlined />} onClick={handleManualLock}>立即锁定</Button>
                     </>
                   ) : (
-                    <button className="primary-button" type="button" onClick={() => setPinModal({ mode: "set-first", pin: "", confirmPin: "" })}>设置 PIN</button>
+                    <Button size="small" type="primary" icon={<LockOutlined />} onClick={() => setPinModal({ mode: "set-first", pin: "", confirmPin: "" })}>设置 PIN</Button>
                   )}
-                </div>
-                {pinModal ? (
-                  <div className="pin-modal-inline">
-                    <form className="modal-form" onSubmit={handlePinSubmit}>
-                      {(pinModal.mode === "set" || pinModal.mode === "clear") ? (
-                        <label className="field"><span>{pinModal.mode === "set" ? "当前 PIN" : "输入 PIN 确认清除"}</span><input autoFocus type="password" inputMode="numeric" maxLength={6} value={pinModal.oldPin ?? ""} onChange={(e) => { const v = e.target.value.replace(/\D/g, ""); setPinModal((c) => ({ ...c, oldPin: v.length <= 6 ? v : c.oldPin })); }} /></label>
-                      ) : null}
-                      <label className="field"><span>{pinModal.mode === "clear" ? "请再次输入 PIN" : "新 PIN（4-6 位数字）"}</span><input type="password" inputMode="numeric" maxLength={6} value={pinModal.pin} onChange={(e) => { const v = e.target.value.replace(/\D/g, ""); setPinModal((c) => ({ ...c, pin: v.length <= 6 ? v : c.pin })); }} autoFocus={pinModal.mode !== "set" && pinModal.mode !== "clear"} /></label>
-                      {(pinModal.mode === "set" || pinModal.mode === "set-first") ? (
-                        <label className="field"><span>确认新 PIN</span><input type="password" inputMode="numeric" maxLength={6} value={pinModal.confirmPin} onChange={(e) => { const v = e.target.value.replace(/\D/g, ""); setPinModal((c) => ({ ...c, confirmPin: v.length <= 6 ? v : c.confirmPin })); }} /></label>
-                      ) : null}
-                      {pinError ? <p className="field-error">{pinError}</p> : null}
-                      <div className="modal-actions"><button className="secondary-button" type="button" onClick={() => { setPinModal(null); setPinError(""); }}>取消</button><button className="primary-button" type="submit" disabled={pinBusy}>{pinBusy ? "处理中…" : "确认"}</button></div>
-                    </form>
-                  </div>
-                ) : null}
+                </Space>
               </div>
-            </div>
-          ) : null}
-          <div className="backup-panel">
-            <SectionHeading eyebrow="数据安全" title="备份与自动恢复点" description={autoBackupAvailable ? "桌面版会在每日首次启动、恢复前和月结后保留恢复点。" : "浏览器预览仅支持手动备份；桌面版才有自动恢复点。"} />
-            <div className="backup-actions">
-              <button className="secondary-button" type="button" onClick={() => onExportBackup()}>导出数据备份</button>
-              <button className="secondary-button" type="button" onClick={() => setPassphraseModal({ mode: "export" })}>导出加密备份</button>
-              <button className="secondary-button" type="button" onClick={() => backupInputRef.current?.click()}>从文件恢复</button>
-            </div>
-            <button className="secondary-button backup-now-button" type="button" disabled={!autoBackupAvailable || autoBackupBusy} onClick={onCreateAutoBackup}>{autoBackupBusy ? "正在创建恢复点…" : "立即创建恢复点"}</button>
-            <input ref={backupInputRef} className="backup-file-input" type="file" accept="application/json,.json" onChange={async (event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              if (!file) return;
-              try {
-                const raw = await file.text();
-                const parsed = JSON.parse(raw);
-                if (parsed.protected) {
-                  setImportPassphraseFile(file);
-                  setImportPassphrase("");
-                } else {
+            )}
+
+            <Text strong style={{ display: "block", marginBottom: 8 }}>数据备份与恢复点</Text>
+            <Space wrap style={{ marginBottom: 16 }}>
+              <Button icon={<ExportOutlined />} onClick={() => onExportBackup()}>导出备份</Button>
+              <Button icon={<LockOutlined />} onClick={() => setPassphraseModal({ mode: "export" })}>加密导出</Button>
+              <Button icon={<ImportOutlined />} onClick={() => backupInputRef.current?.click()}>从文件恢复</Button>
+              <Button
+                type="primary"
+                ghost
+                icon={<CloudUploadOutlined />}
+                disabled={!autoBackupAvailable || autoBackupBusy}
+                onClick={onCreateAutoBackup}
+              >
+                {autoBackupBusy ? "备份中…" : "立即创建恢复点"}
+              </Button>
+            </Space>
+
+            <input
+              ref={backupInputRef}
+              style={{ display: "none" }}
+              type="file"
+              accept="application/json,.json"
+              onChange={async (event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (!file) return;
+                try {
+                  const raw = await file.text();
+                  const parsed = JSON.parse(raw);
+                  if (parsed.protected) {
+                    setImportPassphraseFile(file);
+                    setImportPassphrase("");
+                  } else {
+                    onImportBackup(file);
+                  }
+                } catch {
                   onImportBackup(file);
                 }
-              } catch {
-                onImportBackup(file);
-              }
-            }} />
-            <div className="backup-list">
-              {autoBackups.length === 0 ? <p className="timeline__empty">暂无自动恢复点。</p> : autoBackups.map((backup) => <article key={backup.id} className="backup-item"><div><strong>{new Date(backup.createdAt).toLocaleString("zh-CN")}</strong><span>{backup.reasonLabel}</span></div><button className="secondary-button" type="button" onClick={() => onRestoreAutoBackup(backup.id)}>恢复</button></article>)}
-            </div>
-            {importPassphraseFile ? (
-              <div className="pin-modal-inline">
-                <form className="modal-form" onSubmit={(e) => { e.preventDefault(); onImportBackup(importPassphraseFile, importPassphrase); setImportPassphraseFile(null); }}>
-                  <p>此备份已加密，请输入口令：</p>
-                  <label className="field"><span>备份口令</span><input autoFocus type="password" value={importPassphrase} onChange={(e) => setImportPassphrase(e.target.value)} /></label>
-                  <div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setImportPassphraseFile(null)}>取消</button><button className="primary-button" type="submit" disabled={!importPassphrase}>确认</button></div>
-                </form>
-              </div>
-            ) : null}
-            {passphraseModal?.mode === "export" ? (
-              <div className="pin-modal-inline">
-                <form className="modal-form" onSubmit={(e) => {
-                  e.preventDefault();
-                  const pw = passphraseModal.passphrase ?? "";
-                  if (pw.length < 8) return;
-                  if (pw !== passphraseModal.confirm) return;
-                  onExportBackup(pw);
-                  setPassphraseModal(null);
-                }}>
-                  <p>设置备份口令（至少 8 位）：</p>
-                  <label className="field"><span>口令</span><input autoFocus type="password" value={passphraseModal.passphrase ?? ""} onChange={(e) => setPassphraseModal((c) => ({ ...c, passphrase: e.target.value }))} /></label>
-                  <label className="field"><span>确认口令</span><input type="password" value={passphraseModal.confirm ?? ""} onChange={(e) => setPassphraseModal((c) => ({ ...c, confirm: e.target.value }))} /></label>
-                  <div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setPassphraseModal(null)}>取消</button><button className="primary-button" type="submit" disabled={(passphraseModal.passphrase?.length ?? 0) < 8 || passphraseModal.passphrase !== passphraseModal.confirm}>导出加密备份</button></div>
-                </form>
-              </div>
-            ) : null}
-            <p className="data-safety-warning"><strong>本机数据未加密</strong><span>请使用独立 Windows 账户、BitLocker，并把手动备份保存到受控的其他介质。</span></p>
-            <div className="demo-reset-panel">
-              <strong>恢复泛化演示工作区</strong>
-              <p>仅在需要对外演示或清理旧示例内容时使用。不会在启动时自动覆盖现有本地工作区。</p>
-              <button className="secondary-button" type="button" onClick={onResetDemoWorkspace}>恢复泛化演示工作区</button>
-            </div>
-            <p className="version-copy">当前版本：v{appVersion} · 当前采用手动确认安装更新</p>
-          </div>
-        </aside>
-      </section>
-    </>
+              }}
+            />
+
+            <List
+              header={<Text type="secondary" style={{ fontSize: 12 }}>自动恢复点列表</Text>}
+              bordered
+              size="small"
+              dataSource={autoBackups}
+              locale={{ emptyText: "暂无自动恢复点。" }}
+              renderItem={(backup) => (
+                <List.Item
+                  actions={[
+                    <Button key="res" size="small" onClick={() => onRestoreAutoBackup(backup.id)}>
+                      恢复
+                    </Button>,
+                  ]}
+                >
+                  <List.Item.Meta
+                    title={new Date(backup.createdAt).toLocaleString("zh-CN")}
+                    description={backup.reasonLabel}
+                  />
+                </List.Item>
+              )}
+              style={{ maxHeight: 200, overflowY: "auto", marginBottom: 16 }}
+            />
+
+            <Button block type="dashed" danger onClick={onResetDemoWorkspace}>
+              恢复泛化演示工作区
+            </Button>
+            <Text type="secondary" style={{ display: "block", marginTop: 8, fontSize: 11, textAlign: "center" }}>
+              当前版本：v{appVersion}
+            </Text>
+          </Card>
+        </Col>
+      </Row>
+    </Space>
   );
 }

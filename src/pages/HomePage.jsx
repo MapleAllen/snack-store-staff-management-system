@@ -1,3 +1,17 @@
+import { Card, Row, Col, Button, Tag, Alert, Statistic, List, Space, Typography, Progress } from "antd";
+import {
+  RightOutlined,
+  CheckCircleOutlined,
+  ExclamationCircleOutlined,
+  WarningOutlined,
+  ArrowRightOutlined,
+  ShopOutlined,
+  TeamOutlined,
+  CalendarOutlined,
+  PayCircleOutlined,
+  FileTextOutlined,
+  SettingOutlined,
+} from "@ant-design/icons";
 import { StatCard } from "../components/StatCard.jsx";
 import { SectionHeading } from "../components/SectionHeading.jsx";
 import {
@@ -6,12 +20,14 @@ import {
   getPayrollMonthCloseReadiness,
 } from "../payrollLogic.js";
 
+const { Title, Text, Paragraph } = Typography;
+
 const CORE_FEATURES = [
-  { id: "employees", label: "员工管理", description: "入职、离职、调店与员工历史" },
-  { id: "attendance", label: "考勤管理", description: "录入加班、请假和稽核结果" },
-  { id: "payroll", label: "工资管理", description: "逐人确认、调整、月结与导出" },
-  { id: "reports", label: "报表中心", description: "查看预计、已确认和已月结金额" },
-  { id: "settings", label: "门店设置", description: "门店、工资规则、备份与恢复" },
+  { id: "employees", label: "员工管理", description: "入职、离职、调店与员工历史", icon: <TeamOutlined style={{ fontSize: 24, color: "#1677ff" }} /> },
+  { id: "attendance", label: "考勤管理", description: "录入加班、请假和稽核结果", icon: <CalendarOutlined style={{ fontSize: 24, color: "#52c41a" }} /> },
+  { id: "payroll", label: "工资管理", description: "逐人确认、调整、月结与导出", icon: <PayCircleOutlined style={{ fontSize: 24, color: "#722ed1" }} /> },
+  { id: "reports", label: "报表中心", description: "查看预计、已确认和已月结金额", icon: <FileTextOutlined style={{ fontSize: 24, color: "#fa8c16" }} /> },
+  { id: "settings", label: "门店设置", description: "门店、工资规则、备份与恢复", icon: <SettingOutlined style={{ fontSize: 24, color: "#13c2c2" }} /> },
 ];
 
 export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) {
@@ -45,6 +61,7 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) 
           : readyStores.length
             ? { label: "去做门店月结", hint: `${readyStores.length} 家门店已经可以直接月结`, storeId: nextReady?.storeId }
             : { label: "查看已完成工资", hint: `${closedStores} 家门店已经月结`, storeId: storeSummaries[0]?.storeId };
+
   const priorityRows = storeSummaries
     .flatMap((item) => item.blockers.map((blocker) => ({
       storeId: item.storeId,
@@ -67,159 +84,199 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) 
   }
 
   return (
-    <>
-      <section className="command-center">
-        <div className="command-center__main">
-          <span className="hero__eyebrow">本月指挥台</span>
-          <h1>{recommendedAction.label}</h1>
-          <p>{activeMonth} {recommendedAction.hint}。先清掉阻塞，再决定是否月结和导出。</p>
-          <div className="command-center__actions">
-            <button className="primary-button" type="button" onClick={() => goToPayroll(recommendedAction.storeId)}>{recommendedAction.label}</button>
-            <button className="secondary-button" type="button" onClick={() => onNavigate("reports")}>查看门店报表</button>
-          </div>
-          <div className="command-center__digest">
-            <article className="command-center__metric">
-              <span>当前月结阻塞</span>
-              <strong>{totalBlockers > 0 ? `${totalBlockers} 项` : "没有阻塞"}</strong>
-              <small>{totalBlockers > 0 ? "待确认、待设薪资和输入错误会阻止月结" : "当前可以进入复核或直接月结"}</small>
-            </article>
-            <article className="command-center__metric">
-              <span>老板本轮最先动作</span>
-              <strong>{recommendedAction.label}</strong>
-              <small>{recommendedAction.hint}</small>
-            </article>
-          </div>
-        </div>
-        <div className="command-center__side">
-          <div className="confidence-card">
-            <div className="confidence-card__header">
-              <strong>结薪信心摘要</strong>
-              <span>{activeMonth}</span>
-            </div>
-            <div className="confidence-card__grid">
-              <article className={totalPending > 0 ? "confidence-card__item is-warning" : "confidence-card__item is-success"}>
-                <span>待确认员工</span>
-                <strong>{totalPending} 人</strong>
-                <small>{totalPending > 0 ? "逐个确认后才能进入月结" : "当前没有待确认员工"}</small>
-              </article>
-              <article className={readyStores.length > 0 ? "confidence-card__item is-success" : "confidence-card__item"}>
-                <span>可直接月结</span>
-                <strong>{readyStores.length} 家</strong>
-                <small>{readyStores.length > 0 ? readyStores.map((item) => item.storeName).slice(0, 2).join("、") : "先把员工确认完整"}</small>
-              </article>
-              <article className={totalExceptions > 0 ? "confidence-card__item is-warning" : "confidence-card__item"}>
-                <span>待复核变化</span>
-                <strong>{totalExceptions} 人</strong>
-                <small>{totalExceptions > 0 ? "请假、调整或未达标仍建议抽查" : "当前没有重点变化"}</small>
-              </article>
-            </div>
-          </div>
-          <div className="blocker-digest">
-            <strong>当前阻塞摘要</strong>
-            {blockerReasonSummary.length > 0 ? (
-              <div className="blocker-digest__reasons">
-                {blockerReasonSummary.map(([reason, count]) => (
-                  <span key={reason} className="blocker-digest__reason">{reason} · {count} 人</span>
-                ))}
-              </div>
-            ) : (
-              <p>当前没有月结阻塞，可以直接进入复核或月结。</p>
-            )}
-            {priorityEmployees.length > 0 ? (
-              <div className="priority-checklist__items">
-                {priorityEmployees.map((item) => (
-                  <button key={`${item.storeId}-${item.employeeId}`} className="priority-checklist__item" type="button" onClick={() => goToPayroll(item.storeId)}>
-                    <span>{item.storeName}</span>
-                    <strong>{item.employeeName}</strong>
-                    <small>{item.reason}</small>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </section>
+    <Space direction="vertical" size="large" style={{ width: "100%" }}>
+      {/* 顶部主指挥台 */}
+      <Card
+        style={{
+          background: "linear-gradient(135deg, #001529 0%, #003a8c 100%)",
+          color: "#fff",
+          borderRadius: 12,
+          boxShadow: "0 4px 12px rgba(0,21,41,0.15)",
+        }}
+        bodyStyle={{ padding: 28 }}
+      >
+        <Row gutter={[24, 24]} align="middle">
+          <Col xs={24} lg={14}>
+            <Tag color="blue" style={{ marginBottom: 12 }}>本月指挥台 · {activeMonth}</Tag>
+            <Title level={2} style={{ color: "#fff", marginTop: 0, marginBottom: 8 }}>
+              {recommendedAction.label}
+            </Title>
+            <Paragraph style={{ color: "rgba(255,255,255,0.85)", fontSize: 15, marginBottom: 20 }}>
+              {recommendedAction.hint}。先清掉阻塞，再决定是否月结和导出。
+            </Paragraph>
+            <Space size="middle">
+              <Button type="primary" size="large" onClick={() => goToPayroll(recommendedAction.storeId)}>
+                {recommendedAction.label} <ArrowRightOutlined />
+              </Button>
+              <Button style={{ background: "rgba(255,255,255,0.15)", color: "#fff", borderColor: "transparent" }} size="large" onClick={() => onNavigate("reports")}>
+                查看门店报表
+              </Button>
+            </Space>
+          </Col>
+          <Col xs={24} lg={10}>
+            <Card
+              size="small"
+              style={{ background: "rgba(255, 255, 255, 0.1)", borderColor: "rgba(255, 255, 255, 0.2)", borderRadius: 8 }}
+              bodyStyle={{ padding: 16 }}
+            >
+              <Text strong style={{ color: "#fff", fontSize: 14 }}>结薪信心摘要</Text>
+              <Row gutter={[12, 12]} style={{ marginTop: 12 }}>
+                <Col span={8}>
+                  <Statistic
+                    title={<span style={{ color: "rgba(255,255,255,0.7)" }}>待确认员工</span>}
+                    value={totalPending}
+                    suffix="人"
+                    valueStyle={{ color: totalPending > 0 ? "#faad14" : "#52c41a", fontSize: 20 }}
+                  />
+                </Col>
+                <Col span={8}>
+                  <Statistic
+                    title={<span style={{ color: "rgba(255,255,255,0.7)" }}>可直接月结</span>}
+                    value={readyStores.length}
+                    suffix="家"
+                    valueStyle={{ color: readyStores.length > 0 ? "#52c41a" : "#fff", fontSize: 20 }}
+                  />
+                </Col>
+                <Col span={8}>
+                  <Statistic
+                    title={<span style={{ color: "rgba(255,255,255,0.7)" }}>待复核变化</span>}
+                    value={totalExceptions}
+                    suffix="人"
+                    valueStyle={{ color: totalExceptions > 0 ? "#fa147a" : "#fff", fontSize: 20 }}
+                  />
+                </Col>
+              </Row>
+            </Card>
+          </Col>
+        </Row>
+      </Card>
 
-      <section className="stats-grid">
-        <StatCard label="预计实发" value={formatCurrency(totalForecast)} hint={`${totalEmployees} 位在岗员工`} accent="primary" />
-        <StatCard label="已确认实发" value={formatCurrency(totalConfirmed)} hint={`${totalPending} 人待确认`} />
-        <StatCard label="已月结实发" value={formatCurrency(totalClosed)} hint={`${closedStores}/${readiness.storeCount} 家门店完成`} accent={closedStores === readiness.storeCount ? "success" : "default"} />
-        <StatCard label="月结阻塞" value={`${totalBlockers} 项`} hint={`待确认 ${totalPending} · 待设置 ${totalUnconfigured} · 输入有误 ${totalInvalid}`} accent={totalBlockers ? "warning" : "success"} />
-      </section>
+      {/* 阻塞提示与关键数值指标 */}
+      {totalBlockers > 0 ? (
+        <Alert
+          type="warning"
+          showIcon
+          icon={<WarningOutlined />}
+          message={`当前月结阻塞：${totalBlockers} 项`}
+          description={
+            <Space direction="vertical" style={{ width: "100%", marginTop: 4 }}>
+              <Text type="secondary">待确认 {totalPending} · 待设置薪资 {totalUnconfigured} · 输入有误 {totalInvalid}</Text>
+              {priorityEmployees.length > 0 && (
+                <Space wrap style={{ marginTop: 4 }}>
+                  {priorityEmployees.map((item) => (
+                    <Button
+                      key={`${item.storeId}-${item.employeeId}`}
+                      size="small"
+                      type="dashed"
+                      danger
+                      onClick={() => goToPayroll(item.storeId)}
+                    >
+                      {item.storeName} - {item.employeeName}: {item.reason}
+                    </Button>
+                  ))}
+                </Space>
+              )}
+            </Space>
+          }
+        />
+      ) : (
+        <Alert
+          type="success"
+          showIcon
+          icon={<CheckCircleOutlined />}
+          message="当前没有月结阻塞，随时可以进入复核或直接月结。"
+        />
+      )}
 
-      <section className="panel page-panel quick-access-panel" aria-labelledby="quick-access-title">
-        <SectionHeading id="quick-access-title" eyebrow="快速上手" title="所有功能，两步内到达" description="先选功能，再在页面内完成操作；日常功能不藏在第三级菜单。" />
-        <div className="quick-access-grid">
+      <Row gutter={[16, 16]}>
+        <Col xs={24} sm={12} lg={6}>
+          <StatCard label="预计实发" value={formatCurrency(totalForecast)} hint={`${totalEmployees} 位在岗员工`} accent="primary" />
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <StatCard label="已确认实发" value={formatCurrency(totalConfirmed)} hint={`${totalPending} 人待确认`} />
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <StatCard label="已月结实发" value={formatCurrency(totalClosed)} hint={`${closedStores}/${readiness.storeCount} 家门店完成`} accent={closedStores === readiness.storeCount ? "success" : "default"} />
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <StatCard label="月结阻塞" value={`${totalBlockers} 项`} hint={`待确认 ${totalPending} · 待设置 ${totalUnconfigured}`} accent={totalBlockers ? "warning" : "success"} />
+        </Col>
+      </Row>
+
+      {/* 快速导航 */}
+      <Card size="small" title="快捷导航" style={{ borderRadius: 8 }}>
+        <Row gutter={[16, 16]}>
           {CORE_FEATURES.map((feature) => (
-            <button className="quick-access-card" key={feature.id} type="button" onClick={() => onNavigate(feature.id)}>
-              <strong>{feature.label}</strong>
-              <span>{feature.description}</span>
-              <small>打开功能</small>
-            </button>
+            <Col xs={24} sm={12} md={4.8} key={feature.id}>
+              <Card
+                hoverable
+                size="small"
+                onClick={() => onNavigate(feature.id)}
+                style={{ textAlign: "center", cursor: "pointer", height: "100%" }}
+              >
+                <div style={{ marginBottom: 8 }}>{feature.icon}</div>
+                <Text strong style={{ display: "block", fontSize: 14 }}>{feature.label}</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>{feature.description}</Text>
+              </Card>
+            </Col>
           ))}
-        </div>
-      </section>
+        </Row>
+      </Card>
 
-      <section className="dashboard-grid">
-        <div className="panel page-panel">
-          <SectionHeading eyebrow="门店待办" title={`${readiness.storeCount} 家门店处理状态`} description="先看阶段，再决定是否进入工资工作台。" />
-          <div className="store-cards">
-            {storeSummaries.map((item) => {
-              const maxTotal = Math.max(...storeSummaries.map((summary) => summary.totals.estimated), 1);
-              const status = item.status === "closed"
-                ? { label: "已月结", tone: "success" }
-                : item.status === "empty"
-                  ? { label: "暂无员工", tone: "idle" }
-                  : item.unconfiguredCount
-                  ? { label: "待设置薪资", tone: "warning" }
+      {/* 门店处理状态 */}
+      <Card title={`${readiness.storeCount} 家门店处理状态`} style={{ borderRadius: 8 }}>
+        <Row gutter={[16, 16]}>
+          {storeSummaries.map((item) => {
+            const maxTotal = Math.max(...storeSummaries.map((summary) => summary.totals.estimated), 1);
+            const status = item.status === "closed"
+              ? { label: "已月结", color: "success" }
+              : item.status === "empty"
+                ? { label: "暂无员工", color: "default" }
+                : item.unconfiguredCount
+                  ? { label: "待设置薪资", color: "warning" }
                   : item.invalidCount
-                    ? { label: "有输入错误", tone: "danger" }
+                    ? { label: "有输入错误", color: "error" }
                     : item.pendingCount
-                      ? { label: "待员工确认", tone: "idle" }
+                      ? { label: "待员工确认", color: "processing" }
                       : item.reviewCount
-                        ? { label: "已确认待复核", tone: "warning" }
-                        : { label: "可直接月结", tone: "success" };
-              const showingBlockers = item.blockers.length > 0;
-              const alertRows = showingBlockers ? item.blockers.slice(0, 1) : item.reviews.slice(0, 2);
-              return (
-                <button className="store-card" key={item.storeId} type="button" onClick={() => goToPayroll(item.storeId)}>
-                  <div className="store-card__stage">
-                    <span className={`status-badge status-badge--${status.tone}`}>{status.label}</span>
-                    <span>{item.blockerCount > 0 ? `阻塞 ${item.blockerCount}` : item.reviewCount > 0 ? `复核 ${item.reviewCount}` : "状态稳定"}</span>
-                  </div>
-                  <strong className="store-card__title">{item.storeName}</strong>
-                  <strong className="store-card__value">{formatCurrency(item.status === "closed" ? item.totals.closed : item.totals.confirmed)}</strong>
-                  <span className="store-card__forecast">预计 {formatCurrency(item.totals.estimated)}</span>
-                  <div className="progress-track"><span style={{ width: `${Math.max(10, (item.totals.estimated / maxTotal) * 100)}%` }} /></div>
-                  <div className="store-card__meta">
+                        ? { label: "已确认待复核", color: "warning" }
+                        : { label: "可直接月结", color: "success" };
+
+            const percent = Math.round((item.totals.estimated / maxTotal) * 100);
+
+            return (
+              <Col xs={24} sm={12} lg={8} key={item.storeId}>
+                <Card
+                  hoverable
+                  size="small"
+                  onClick={() => goToPayroll(item.storeId)}
+                  style={{ borderRadius: 8 }}
+                  title={
+                    <Space>
+                      <ShopOutlined />
+                      <Text strong>{item.storeName}</Text>
+                    </Space>
+                  }
+                  extra={<Tag color={status.color}>{status.label}</Tag>}
+                >
+                  <Statistic
+                    title="实发金额 / 预计"
+                    value={item.status === "closed" ? item.totals.closed : item.totals.confirmed}
+                    prefix="￥"
+                    suffix={<span style={{ fontSize: 12, color: "#8c8c8c" }}> / 预 ￥{item.totals.estimated}</span>}
+                  />
+                  <Progress percent={percent} size="small" status={item.status === "closed" ? "success" : "active"} style={{ margin: "8px 0" }} />
+                  <Space split={<Text type="secondary">·</Text>} size="small" style={{ fontSize: 12 }}>
                     <span>已确认 {item.confirmedCount}</span>
                     <span>待确认 {item.pendingCount}</span>
                     <span>待复核 {item.reviewCount}</span>
-                  </div>
-                  {alertRows.length > 0 ? (
-                    <div className="store-card__alerts">
-                      {alertRows.map((row) => (
-                        <span key={row.employeeId}>
-                          {row.employeeName}：{showingBlockers ? getPayrollIssueMessage(row.issues[0]) : row.issueItems[0]}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <aside className="panel page-panel">
-          <SectionHeading eyebrow="核薪顺序" title="老板确认顺序" description="用同一套顺序处理所有门店。" />
-          <ol className="workflow-list">
-            <li><strong>先补薪资设置</strong><span>新员工没有三项薪资时，不能进入确认。</span></li>
-            <li><strong>逐个确认员工</strong><span>即使本月没变化，也要点确认完成。</span></li>
-            <li><strong>复核重点变化</strong><span>重点看请假、调整和未达标员工。</span></li>
-            <li><strong>月结并导出</strong><span>全部确认后再冻结并导出正式工资表。</span></li>
-          </ol>
-        </aside>
-      </section>
-    </>
+                  </Space>
+                </Card>
+              </Col>
+            );
+          })}
+        </Row>
+      </Card>
+    </Space>
   );
 }
