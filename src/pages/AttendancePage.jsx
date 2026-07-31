@@ -1,14 +1,12 @@
-import { Card, Table, InputNumber, Input, Button, Tag, Row, Col, Alert, Space, Tooltip, Typography, Switch, Popconfirm } from "antd";
+import { useState } from "react";
+import { Card, Table, InputNumber, Input, Button, Tag, Row, Col, Alert, Space, Tooltip, Typography, Switch, Dropdown, Modal } from "antd";
 import {
   CheckCircleOutlined,
-  CloseCircleOutlined,
   ArrowRightOutlined,
-  ClockCircleOutlined,
-  CalendarOutlined,
-  FileDoneOutlined,
   LockOutlined,
   ClearOutlined,
-  WarningOutlined,
+  DownOutlined,
+  ExclamationCircleOutlined,
 } from "@ant-design/icons";
 import { PageHeader } from "../components/PageHeader.jsx";
 import { StatCard } from "../components/StatCard.jsx";
@@ -17,20 +15,24 @@ import { getPayrollIssueMessage } from "../payrollLogic.js";
 const { Text } = Typography;
 
 export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleComplete, isLocked, onNavigate }) {
+  const [batchModal, setBatchModal] = useState(null);
+
   const totalOvertime = rows.reduce((sum, row) => sum + row.breakdown.overtimeHours, 0);
   const totalLeaveDays = rows.reduce((sum, row) => sum + row.breakdown.leaveDays, 0);
-  const qualified = rows.filter((row) => row.entry.auditPassed).length;
+  const unconfirmedCount = rows.filter((row) => !row.entry.isComplete).length;
 
   function handleBatchAuditPass() {
     rows.forEach((row) => {
       patchEntry(row.employee.id, { auditPassed: true });
     });
+    setBatchModal(null);
   }
 
   function handleBatchClearLeave() {
     rows.forEach((row) => {
       patchEntry(row.employee.id, { leaveDays: 0, leaveHours: 0 });
     });
+    setBatchModal(null);
   }
 
   const columns = [
@@ -38,8 +40,13 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
       title: "姓名",
       dataIndex: ["employee", "name"],
       key: "name",
-      width: 120,
-      render: (text) => <Text strong>{text}</Text>,
+      width: 130,
+      render: (text, record) => (
+        <Space direction="vertical" size={0}>
+          <Text strong>{text}</Text>
+          <Text type="secondary" style={{ fontSize: 11 }}>工号: {record.employee.id}</Text>
+        </Space>
+      ),
     },
     {
       title: "加班时长 (小时)",
@@ -120,14 +127,14 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
         ]
       : []),
     {
-      title: "稽核状态",
+      title: "全勤/稽核达标",
       key: "auditPassed",
-      width: 120,
+      width: 140,
       render: (_, record) => (
         <Switch
           disabled={isLocked}
           checked={record.entry.auditPassed}
-          checkedChildren="达标"
+          checkedChildren="全勤达标"
           unCheckedChildren="未达标"
           onChange={(checked) => patchEntry(record.employee.id, { auditPassed: checked })}
         />
@@ -140,7 +147,7 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
         <Input
           disabled={isLocked}
           value={record.entry.note}
-          placeholder="考勤备注"
+          placeholder="添加考勤备注"
           onChange={(e) => patchEntry(record.employee.id, { note: e.target.value })}
         />
       ),
@@ -148,23 +155,33 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
     {
       title: "录入确认",
       key: "isComplete",
-      width: 150,
+      width: 160,
+      align: "right",
       render: (_, record) => {
         const disabled = isLocked || (!record.entry.isComplete && record.validationIssues.length > 0);
         const issueMsg = getPayrollIssueMessage(record.validationIssues[0]);
+        const completedTimeStr = record.entry.completedAt
+          ? new Date(record.entry.completedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
+          : "";
 
-        const btn = (
+        const btn = record.entry.isComplete ? (
           <Button
-            type={record.entry.isComplete ? "primary" : "default"}
-            disabled={disabled}
-            icon={record.entry.isComplete ? <CheckCircleOutlined /> : undefined}
-            onClick={() => toggleComplete(record.employee.id, !record.entry.isComplete)}
+            type="primary"
+            style={{ backgroundColor: "#52c41a", borderColor: "#52c41a" }}
+            disabled={isLocked}
+            icon={<CheckCircleOutlined />}
+            onClick={() => toggleComplete(record.employee.id, false)}
           >
-            {record.entry.isComplete
-              ? "已确认完成"
-              : record.validationIssues.length
-              ? "先修正再确认"
-              : "确认完成"}
+            已确认 {completedTimeStr}
+          </Button>
+        ) : (
+          <Button
+            type="default"
+            danger={record.validationIssues.length > 0}
+            disabled={disabled}
+            onClick={() => toggleComplete(record.employee.id, true)}
+          >
+            {record.validationIssues.length ? "无法确认 (有错误)" : "点此确认完成"}
           </Button>
         );
 
@@ -177,58 +194,82 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
     },
   ];
 
+  const batchMenuItems = [
+    {
+      key: "auditPass",
+      label: "一键全员稽核达标",
+      icon: <CheckCircleOutlined />,
+      onClick: () => setBatchModal("auditPass"),
+    },
+    {
+      key: "clearLeave",
+      label: "清空所有请假记录",
+      icon: <ClearOutlined />,
+      danger: true,
+      onClick: () => setBatchModal("clearLeave"),
+    },
+  ];
+
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
       <PageHeader
         eyebrow="考勤管理"
         title={`${store.name} 考勤管理`}
-        description={`${activeMonth} 考勤录入实时参与薪酬计算。${isLocked ? " 本月已月结封账，为只读模式。" : ""}`}
+        description={`${activeMonth} 考勤录入实时参与薪酬计算。${isLocked ? " 本月已月结封账，处于只读模式。" : ""}`}
         actions={
           <Button type="primary" size="large" icon={<ArrowRightOutlined />} onClick={() => onNavigate("payroll")}>
-            去核对工资
+            去工资台确认核对
           </Button>
         }
       />
 
+      {/* 月结封账警告 */}
       {isLocked && (
         <Alert
           type="info"
           showIcon
           icon={<LockOutlined />}
           message="当前月份已月结封账"
-          description="如需修改考勤数据，请先在“工资管理”中提交解锁原因。"
+          description="如需修改考勤数据，请先在“工资管理”页面中提交解锁原因并解锁。"
         />
       )}
 
+      {/* 待确认员工提示 Banner */}
+      {!isLocked && unconfirmedCount > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          icon={<ExclamationCircleOutlined />}
+          message={`尚有 ${unconfirmedCount} 位员工的考勤未确认完成`}
+          description="录入完加班、请假与稽核达标状态后，请在表格最右侧点击“点此确认完成”。"
+          action={
+            <Button size="small" type="primary" onClick={() => onNavigate("payroll")}>
+              去工资台核对
+            </Button>
+          }
+        />
+      )}
+
+      {/* 2 张核心指标卡 (代替原来的 4 张平权卡) */}
       <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} lg={6}>
-          <StatCard label="累计加班" value={`${totalOvertime} 小时`} hint="按员工加班时薪计入工资" accent="primary" />
+        <Col xs={24} sm={12}>
+          <StatCard label="本月累计加班" value={`${totalOvertime} 小时`} hint="按员工个人加班时薪独立计入应发工资" accent="primary" />
         </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <StatCard label="累计请假" value={`${totalLeaveDays} 天`} hint="另含按小时请假扣减" />
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <StatCard label="稽核达标" value={`${qualified} 人`} hint={`共 ${rows.length} 位员工`} accent="success" />
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <StatCard label="夜班规则" value={store.config.nightShiftRate ? `${store.config.nightShiftRate} 元/时` : "未启用"} hint="按门店规则计算" />
+        <Col xs={24} sm={12}>
+          <StatCard label="本月累计请假" value={`${totalLeaveDays} 天`} hint="按门店算薪规则天数/小时除数扣减基础工资" accent="warning" />
         </Col>
       </Row>
 
+      {/* 考勤明细表格 */}
       <Card
         title="本月考勤录入明细"
         extra={
           !isLocked && (
-            <Space wrap>
-              <Button size="small" icon={<CheckCircleOutlined />} onClick={handleBatchAuditPass}>
-                一键全员稽核达标
+            <Dropdown menu={{ items: batchMenuItems }} placement="bottomRight">
+              <Button size="middle">
+                批量操作 <DownOutlined />
               </Button>
-              <Popconfirm title="确定清空所有员工的请假记录？" onConfirm={handleBatchClearLeave}>
-                <Button size="small" icon={<ClearOutlined />}>
-                  清空请假记录
-                </Button>
-              </Popconfirm>
-            </Space>
+            </Dropdown>
           )
         }
         style={{ borderRadius: 8 }}
@@ -237,10 +278,29 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
           columns={columns}
           dataSource={rows}
           rowKey={(row) => row.employee.id}
+          rowClassName={(row) => (row.entry.isComplete ? "row-status-confirmed" : "row-status-pending")}
           pagination={false}
           size="middle"
         />
       </Card>
+
+      {/* 批量操作确认 Modal */}
+      {batchModal && (
+        <Modal
+          title={batchModal === "auditPass" ? "确认一键全员稽核达标" : "确认清空所有请假记录"}
+          open={Boolean(batchModal)}
+          onCancel={() => setBatchModal(null)}
+          onOk={batchModal === "auditPass" ? handleBatchAuditPass : handleBatchClearLeave}
+          okText="确认执行"
+          cancelText="取消"
+        >
+          <p>
+            {batchModal === "auditPass"
+              ? `即将为 ${store.name} 本月全部 ${rows.length} 位员工标记为“全勤/稽核达标”，确定继续吗？`
+              : `即将清空 ${store.name} 本月所有员工的请假天数与请假小时，此操作不可撤销，确定继续吗？`}
+          </p>
+        </Modal>
+      )}
     </Space>
   );
 }
