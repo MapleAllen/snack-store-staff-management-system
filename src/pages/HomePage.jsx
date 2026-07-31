@@ -6,11 +6,6 @@ import {
   WarningOutlined,
   ArrowRightOutlined,
   ShopOutlined,
-  TeamOutlined,
-  CalendarOutlined,
-  PayCircleOutlined,
-  FileTextOutlined,
-  SettingOutlined,
 } from "@ant-design/icons";
 import { StatCard } from "../components/StatCard.jsx";
 import { SectionHeading } from "../components/SectionHeading.jsx";
@@ -21,14 +16,6 @@ import {
 } from "../payrollLogic.js";
 
 const { Title, Text, Paragraph } = Typography;
-
-const CORE_FEATURES = [
-  { id: "employees", label: "员工管理", description: "入职、离职、调店与员工历史", icon: <TeamOutlined style={{ fontSize: 24, color: "#1677ff" }} /> },
-  { id: "attendance", label: "考勤管理", description: "录入加班、请假和稽核结果", icon: <CalendarOutlined style={{ fontSize: 24, color: "#52c41a" }} /> },
-  { id: "payroll", label: "工资管理", description: "逐人确认、调整、月结与导出", icon: <PayCircleOutlined style={{ fontSize: 24, color: "#722ed1" }} /> },
-  { id: "reports", label: "报表中心", description: "查看预计、已确认和已月结金额", icon: <FileTextOutlined style={{ fontSize: 24, color: "#fa8c16" }} /> },
-  { id: "settings", label: "门店设置", description: "门店、工资规则、备份与恢复", icon: <SettingOutlined style={{ fontSize: 24, color: "#13c2c2" }} /> },
-];
 
 export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) {
   const readiness = getPayrollMonthCloseReadiness(workspace, activeMonth);
@@ -202,26 +189,6 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) 
           <StatCard label="月结阻塞" value={`${totalBlockers} 项`} hint={`待确认 ${totalPending} · 待设置 ${totalUnconfigured}`} accent={totalBlockers ? "warning" : "success"} />
         </Col>
       </Row>
-
-      {/* 快速导航 */}
-      <Card size="small" title="快捷导航" style={{ borderRadius: 8 }}>
-        <Row gutter={[16, 16]}>
-          {CORE_FEATURES.map((feature) => (
-            <Col xs={24} sm={12} md={4.8} key={feature.id}>
-              <Card
-                hoverable
-                size="small"
-                onClick={() => onNavigate(feature.id)}
-                style={{ textAlign: "center", cursor: "pointer", height: "100%" }}
-              >
-                <div style={{ marginBottom: 8 }}>{feature.icon}</div>
-                <Text strong style={{ display: "block", fontSize: 14 }}>{feature.label}</Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>{feature.description}</Text>
-              </Card>
-            </Col>
-          ))}
-        </Row>
-      </Card>
 
       {/* 门店处理状态 */}
       <Card title={`${readiness.storeCount} 家门店处理状态`} style={{ borderRadius: 8 }}>
