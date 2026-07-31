@@ -52,7 +52,8 @@ const DEFAULT_PAYROLL_ADJUSTMENT_DRAFT = {
 };
 
 function makePayrollAdjustmentId() {
-  const value = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  const value = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
   return `payroll-adjustment-${value}`;
 }
 

@@ -94,7 +94,8 @@ const NAV_ITEMS = [
 
 
 function makeId(prefix) {
-  const value = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  const value = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
   return `${prefix}-${value}`;
 }
 
