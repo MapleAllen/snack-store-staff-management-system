@@ -1,6 +1,6 @@
 import { Modal as AntModal } from "antd";
 
-export function Modal({ title, children, onClose }) {
+export function Modal({ title, children, onClose, width }) {
   return (
     <AntModal
       open={true}
@@ -9,6 +9,7 @@ export function Modal({ title, children, onClose }) {
       footer={null}
       destroyOnClose
       centered
+      width={width}
     >
       {children}
     </AntModal>

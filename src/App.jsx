@@ -13,7 +13,6 @@ import {
   createEmployeeDraft,
   csvEscape,
   formatCurrency,
-  formatTimestamp,
   getEmployeeAssignments,
   getEmployeesForStore,
   getMonthlyStoreRecord,
@@ -63,6 +62,7 @@ import {
   Typography,
   Tooltip,
   Alert,
+  ConfigProvider,
 } from "antd";
 import {
   HomeOutlined,
@@ -780,8 +780,23 @@ export function App() {
 
   if (!activeStoreView) return <div className="app-empty">没有可用门店，请从备份恢复数据。</div>;
 
+  const formattedSaveTime = saveState.savedAt
+    ? `已保存 ${new Date(saveState.savedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`
+    : "已保存";
+
   return (
-    <>
+    <ConfigProvider
+      theme={{
+        token: {
+          colorPrimary: "#1677ff",
+          colorSuccess: "#52c41a",
+          colorWarning: "#faad14",
+          colorError: "#ff4d4f",
+          borderRadius: 8,
+          fontFamily: '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", -apple-system, sans-serif',
+        },
+      }}
+    >
       <Layout style={{ minHeight: "100vh" }}>
         <Sider
           collapsible
@@ -860,10 +875,10 @@ export function App() {
                 prefix={<ShopOutlined />}
               />
               {saveState.status === "error" ? (
-                <Tag color="error">保存失败</Tag>
+                <Tag color="error">保存失败，请检查导出</Tag>
               ) : (
                 <Tag color="success" icon={<CheckCircleOutlined />}>
-                  {saveState.savedAt ? formatTimestamp(saveState.savedAt) : "自动保存"}
+                  {formattedSaveTime}
                 </Tag>
               )}
               <Tooltip title="锁定应用">
@@ -881,7 +896,7 @@ export function App() {
             {activePage === "employees" ? <EmployeesPage workspace={workspace} store={activeStore} currentMonth={currentMonth} onCreate={() => setEmployeeModal({ mode: "create", draft: createEmployeeDraft() })} onEdit={(employee) => setEmployeeModal({ mode: "edit", employeeId: employee.id, draft: createEmployeeDraft(employee) })} onToggleResignation={handleToggleResignation} onTransfer={openTransferModal} /> : null}
             {activePage === "attendance" ? <AttendancePage store={activeStore} activeMonth={activeMonth} rows={payrollRows} patchEntry={patchMonthlyEntry} toggleComplete={toggleEntryComplete} isLocked={isLocked} onNavigate={setActivePage} /> : null}
             {activePage === "reports" ? <ReportsPage workspace={workspace} activeMonth={activeMonth} setActiveMonth={setActiveMonth} onSelectStore={setActiveStoreId} onNavigate={setActivePage} /> : null}
-            {activePage === "settings" ? <SettingsPage store={activeStore} stores={workspace.stores} patchConfig={patchStoreConfig} appVersion={APP_VERSION} onExportBackup={exportWorkspaceBackup} onImportBackup={prepareWorkspaceRestore} onCreateStore={() => setStoreModal({ mode: "create", name: "" })} onEditStore={(store) => setStoreModal({ mode: "edit", storeId: store.id, name: store.name })} onArchiveStore={requestArchiveStore} onRestoreStore={restoreStore} autoBackups={autoBackups} autoBackupAvailable={Boolean(desktopApi)} autoBackupBusy={autoBackupBusy} onCreateAutoBackup={() => createAutomaticBackup(BACKUP_REASONS.MANUAL)} onRestoreAutoBackup={prepareAutomaticRestore} onRequestLock={() => setAppLocked(true)} onResetDemoWorkspace={() => setDemoResetModal(true)} ruleHistory={(workspace.ruleHistory ?? []).filter((record) => record.storeId === activeStore.id)} /> : null}
+            {activePage === "settings" ? <SettingsPage store={activeStoreView} stores={workspace.stores} patchConfig={patchStoreConfig} onExportBackup={exportWorkspaceBackup} onImportBackup={prepareWorkspaceRestore} onCreateStore={() => setStoreModal({ mode: "create", name: "" })} onEditStore={(store) => setStoreModal({ mode: "edit", storeId: store.id, name: store.name })} onArchiveStore={requestArchiveStore} onRestoreStore={restoreStore} autoBackups={autoBackups} autoBackupAvailable={Boolean(desktopApi)} autoBackupBusy={autoBackupBusy} onCreateAutoBackup={() => createAutomaticBackup(BACKUP_REASONS.MANUAL)} onRestoreAutoBackup={prepareAutomaticRestore} onRequestLock={() => setAppLocked(true)} onResetDemoWorkspace={() => setDemoResetModal(true)} ruleHistory={(workspace.ruleHistory ?? []).filter((record) => record.storeId === activeStore.id)} /> : null}
             {activePage === "payroll" ? <PayrollPage activeStore={activeStoreView} activeMonth={activeMonth} setActiveMonth={setActiveMonth} exportCurrentMonth={exportCurrentMonth} totalNetSalary={totalNetSalary} forecastNetSalary={forecastNetSalary} payrollRows={payrollRows} touchedRows={touchedRows} exceptionCount={exceptionCount} completionRate={completionRate} monthlyStore={monthlyStore} selectedRow={selectedRow} setSelectedEmployeeId={setSelectedEmployeeId} patchMonthlyEntry={patchMonthlyEntry} toggleEntryComplete={toggleEntryComplete} setEmployeeModal={setEmployeeModal} openAdjustmentModal={openAdjustmentModal} isLocked={isLocked} onClosePayroll={requestClosePayroll} onUnlockPayroll={() => setUnlockModal({ reason: "" })} /> : null}
           </Content>
         </Layout>
@@ -896,7 +911,7 @@ export function App() {
 
       {employeeModal ? <Modal title={employeeModal.mode === "create" ? "新增员工" : "编辑员工姓名"} onClose={() => setEmployeeModal(null)}><form className="modal-form" onSubmit={submitEmployee}><label className="field"><span>姓名</span><input autoFocus value={employeeModal.draft.name} onChange={(event) => setEmployeeModal((current) => ({ ...current, draft: { ...current.draft, name: event.target.value } }))} /></label><p className="modal-copy">基础工资、加班时薪和全勤奖金只能在工资管理的调薪记录中修改。</p><ModalActions onCancel={() => setEmployeeModal(null)} label="保存员工" /></form></Modal> : null}
 
-      {adjustmentModal ? <Modal title={adjustmentModal.mode === "initial" ? "设置初始薪资" : "新增调薪记录"} onClose={() => setAdjustmentModal(null)}><form className="modal-form modal-form--wide" onSubmit={submitAdjustment}><label className="field"><span>员工</span><select value={adjustmentModal.draft.employeeId} onChange={(event) => { const employee = activeEmployees.find((item) => item.id === event.target.value); setAdjustmentModal((current) => ({ ...current, mode: employee?.salaryConfigured ? "adjustment" : "initial", draft: { ...createAdjustmentDraft(employee), date: current.draft.date, notes: current.draft.notes } })); }}>{activeEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></label><label className="field"><span>调整日期</span><input type="date" value={adjustmentModal.draft.date} onChange={(event) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, date: event.target.value } }))} /></label><div className="adjustment-grid"><div className="adjustment-grid__head">当前值</div><div className="adjustment-grid__head">调整后</div>{EMPLOYEE_FIELDS.map((field) => { const employee = activeEmployees.find((item) => item.id === adjustmentModal.draft.employeeId); const old = employee?.[field.key] ?? 0; return <div className="adjustment-row" key={field.key}><div className="adjustment-row__old"><span>{field.label}</span><strong>{field.key === "overtimeRate" ? `${old} / 小时` : formatCurrency(old)}</strong></div><label className="field adjustment-row__new"><span>{field.label}</span><input type="number" min={field.key === "baseSalary" ? "0.01" : "0"} step={field.step} value={adjustmentModal.draft.values?.[field.key] ?? ""} onChange={(event) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, values: { ...current.draft.values, [field.key]: event.target.value } } }))} /></label></div>; })}</div><label className="field"><span>备注</span><textarea value={adjustmentModal.draft.notes} onChange={(event) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, notes: event.target.value } }))} placeholder={adjustmentModal.mode === "initial" ? "例如：入职初始薪资" : "说明本次调整原因"} /></label><ModalActions onCancel={() => setAdjustmentModal(null)} label={adjustmentModal.mode === "initial" ? "确认初始薪资" : "保存记录"} /></form></Modal> : null}
+      {adjustmentModal ? <Modal title={adjustmentModal.mode === "initial" ? "设置初始薪资" : "新增调薪记录"} width={700} onClose={() => setAdjustmentModal(null)}><form className="modal-form modal-form--wide" onSubmit={submitAdjustment}><label className="field"><span>员工</span><select value={adjustmentModal.draft.employeeId} onChange={(event) => { const employee = activeEmployees.find((item) => item.id === event.target.value); setAdjustmentModal((current) => ({ ...current, mode: employee?.salaryConfigured ? "adjustment" : "initial", draft: { ...createAdjustmentDraft(employee), date: current.draft.date, notes: current.draft.notes } })); }}>{activeEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></label><label className="field"><span>调整日期</span><input type="date" value={adjustmentModal.draft.date} onChange={(event) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, date: event.target.value } }))} /></label><div className="adjustment-grid"><div className="adjustment-grid__head">当前值</div><div className="adjustment-grid__head">调整后</div>{EMPLOYEE_FIELDS.map((field) => { const employee = activeEmployees.find((item) => item.id === adjustmentModal.draft.employeeId); const old = employee?.[field.key] ?? 0; return <div className="adjustment-row" key={field.key}><div className="adjustment-row__old"><span>{field.label}</span><strong>{field.key === "overtimeRate" ? `${old} / 小时` : formatCurrency(old)}</strong></div><label className="field adjustment-row__new"><span>{field.label}</span><input type="number" min={field.key === "baseSalary" ? "0.01" : "0"} step={field.step} value={adjustmentModal.draft.values?.[field.key] ?? ""} onChange={(event) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, values: { ...current.draft.values, [field.key]: event.target.value } } }))} /></label></div>; })}</div><label className="field"><span>备注</span><textarea value={adjustmentModal.draft.notes} onChange={(event) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, notes: event.target.value } }))} placeholder={adjustmentModal.mode === "initial" ? "例如：入职初始薪资" : "说明本次调整原因"} /></label><ModalActions onCancel={() => setAdjustmentModal(null)} label={adjustmentModal.mode === "initial" ? "确认初始薪资" : "保存记录"} /></form></Modal> : null}
 
       {transferModal ? <Modal title="员工调店" onClose={() => setTransferModal(null)}><form className="modal-form" onSubmit={submitTransfer}><div className="modal-summary"><strong>{transferModal.employee.name}</strong><span>当前门店：{activeStore.name}</span></div><label className="field"><span>目标门店</span><select value={transferModal.targetStoreId} onChange={(event) => setTransferModal((current) => ({ ...current, targetStoreId: event.target.value }))}>{activeStores.filter((store) => store.id !== activeStore.id).map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label><label className="field"><span>生效月份</span><input type="month" min={currentMonth} value={transferModal.effectiveMonth} onChange={(event) => setTransferModal((current) => ({ ...current, effectiveMonth: event.target.value }))} /></label><label className="field"><span>调店备注</span><textarea value={transferModal.notes} onChange={(event) => setTransferModal((current) => ({ ...current, notes: event.target.value }))} placeholder="例如：新店开业支援、长期调任" /></label><ModalActions onCancel={() => setTransferModal(null)} label="保存调店计划" /></form></Modal> : null}
 
@@ -939,7 +954,7 @@ export function App() {
       {restoreModal ? <Modal title="恢复备份数据" onClose={() => setRestoreModal(null)}><div className="modal-form"><div className="modal-summary"><strong>即将覆盖当前工资系统数据</strong><span>备份版本：{restoreModal.version ?? "未知"} · 门店数量：{restoreModal.storeCount} 家</span><span>导出时间：{restoreModal.exportedAt ? new Date(restoreModal.exportedAt).toLocaleString("zh-CN") : "未知"}</span></div><p className="modal-copy">旧版备份会自动升级，恢复后保留全部门店、员工及工资记录。</p><div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setRestoreModal(null)}>取消</button><button className="primary-button" type="button" onClick={confirmWorkspaceRestore}>确认恢复</button></div></div></Modal> : null}
 
       {demoResetModal ? <Modal title="恢复泛化演示工作区" onClose={() => setDemoResetModal(false)}><div className="modal-form"><div className="modal-summary"><strong>即将重置为默认演示数据</strong><span>会恢复为泛化门店、虚构员工和示例金额。</span><span>当前本地工作区会被覆盖；如桌面版可用，将先创建恢复点。</span></div><p className="modal-copy">这个操作不会自动迁移旧示例门店名，而是直接回到默认演示工作区。</p><div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setDemoResetModal(false)}>取消</button><button className="primary-button" type="button" onClick={confirmDemoWorkspaceReset}>确认恢复演示数据</button></div></div></Modal> : null}
-    </>
+    </ConfigProvider>
   );
 }
 
