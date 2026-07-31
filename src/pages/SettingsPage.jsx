@@ -1,27 +1,27 @@
 import { useEffect, useRef, useState } from "react";
-import { Card, Form, InputNumber, Input, Button, Tag, Popconfirm, Upload, List, Space, Row, Col, Timeline, Typography, Alert, Modal, Descriptions } from "antd";
+import { Card, Form, InputNumber, Input, Button, Tag, Popconfirm, Row, Col, Timeline, Typography, Alert, Tabs, Space, Modal } from "antd";
 import {
   ShopOutlined,
   EditOutlined,
   StopOutlined,
   ReloadOutlined,
-  SafetyCertificateOutlined,
   LockOutlined,
-  UnlockOutlined,
   ExportOutlined,
   ImportOutlined,
   CloudUploadOutlined,
-  HistoryOutlined,
   SettingOutlined,
+  SafetyCertificateOutlined,
+  WarningOutlined,
   ExclamationCircleOutlined,
+  BulbOutlined,
 } from "@ant-design/icons";
 import { PageHeader } from "../components/PageHeader.jsx";
-import { SectionHeading } from "../components/SectionHeading.jsx";
+import { formatCurrency } from "../payrollLogic.js";
 
-const { Text, Title, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 
 export function SettingsPage({
-  store, stores, patchConfig, appVersion, onExportBackup, onImportBackup,
+  store, stores, patchConfig, onExportBackup, onImportBackup,
   onCreateStore, onEditStore, onArchiveStore, onRestoreStore,
   autoBackups, autoBackupAvailable, autoBackupBusy, onCreateAutoBackup, onRestoreAutoBackup,
   onResetDemoWorkspace, onRequestLock, ruleHistory,
@@ -35,8 +35,6 @@ export function SettingsPage({
   const [lockPinSet, setLockPinSet] = useState(false);
   const [passphraseModal, setPassphraseModal] = useState(null);
   const [importPassphrase, setImportPassphrase] = useState("");
-  const [importPassphraseFile, setImportPassphraseFile] = useState(null);
-  const [restoreDiffModal, setRestoreDiffModal] = useState(null);
   const desktopApi = window.payrollDesktop;
 
   useEffect(() => {
@@ -44,18 +42,61 @@ export function SettingsPage({
     desktopApi.getLockStatus().then((status) => setLockPinSet(status.pinSet)).catch(() => {});
   }, []);
 
+  // 含有通俗解释与实时影响预览的算薪规则定义
   const configFields = [
-    ["socialInsuranceBase", "社保补助基数", "固定计入，不按请假扣减（💡 联动影响本店全员社保补助）", 0],
-    ["mealAllowanceBase", "饭补基数", "每月满勤饭补（💡 联动影响本店全员满勤饭补）", 0],
-    ["auditPassedBonus", "稽核达标奖励", "稽核达标时计入", 0],
-    ["auditFallbackBonus", "稽核未达标保底", "稽核未达标时计入", 0],
-    ["nightShiftRate", "夜班每小时补贴", "设为 0 表示本店不启用", 0],
-    ["leaveDaysDivisor", "请假天数除数", "基础工资除以此数后按天扣减（💡 联动影响本门店所有请假天数扣算比例）", 0.5],
-    ["leaveHoursDivisor", "请假小时除数", "基础工资除以此数后按小时扣减（💡 联动影响本门店请假小时扣算比例）", 0.5],
+    {
+      key: "socialInsuranceBase",
+      label: "固定社保补助基数",
+      hint: "固定发放给员工的社保补贴。不按请假扣减，不折入基础工资。",
+      min: 0,
+      getPreview: (val, empCount) => `${val} 元/人 · 本店 ${empCount} 人每月支出共 ${formatCurrency(val * empCount)}`,
+    },
+    {
+      key: "mealAllowanceBase",
+      label: "满勤饭补基数",
+      hint: "每月全勤满勤时发放的餐食补贴。",
+      min: 0,
+      getPreview: (val, empCount) => `${val} 元/人 · 满勤发满，请假按比例扣除`,
+    },
+    {
+      key: "auditPassedBonus",
+      label: "全勤/稽核达标奖励",
+      hint: "考勤标记为达标时奖励的金额。",
+      min: 0,
+      getPreview: (val) => `稽核达标按 +${val} 元/人计入算薪`,
+    },
+    {
+      key: "auditFallbackBonus",
+      label: "稽核未达标保底",
+      hint: "考勤未达标时的保底奖励金额。",
+      min: 0,
+      getPreview: (val) => `未达标按 +${val} 元/人计入算薪`,
+    },
+    {
+      key: "nightShiftRate",
+      label: "夜班每小时补贴",
+      hint: "夜班补贴单价。设为 0 元表示本店不启用夜班补贴。",
+      min: 0,
+      getPreview: (val) => val > 0 ? `按 ${val} 元/小时 × 实际夜班时长计算` : "未启用夜班补贴",
+    },
+    {
+      key: "leaveDaysDivisor",
+      label: "请假天数扣算除数",
+      hint: "基础工资除以此天数算出日工资，按请假天数扣减。",
+      min: 0.5,
+      getPreview: (val) => `日扣除金额 = 基础工资 ÷ ${val} 天 × 请假天数`,
+    },
+    {
+      key: "leaveHoursDivisor",
+      label: "请假小时扣算除数",
+      hint: "基础工资除以此小时数算出一小时工资，按请假小时扣减。",
+      min: 0.5,
+      getPreview: (val) => `时扣除金额 = 基础工资 ÷ ${val} 小时 × 请假小时`,
+    },
   ];
 
   useEffect(() => {
-    setDrafts(Object.fromEntries(configFields.map(([key]) => [key, store.config[key]])));
+    setDrafts(Object.fromEntries(configFields.map(({ key }) => [key, store.config[key]])));
     setErrors({});
   }, [store.id]);
 
@@ -112,12 +153,300 @@ export function SettingsPage({
     } catch {}
   }
 
+  const latestBackup = autoBackups.length > 0 ? autoBackups[0] : null;
+  const employeeCount = (store.employees ?? []).length;
+
+  const tabItems = [
+    {
+      key: "stores",
+      label: <Space><ShopOutlined /> 门店架构管理</Space>,
+      children: (
+        <Card title="门店营业状态与列表" style={{ borderRadius: 8 }}>
+          <Row gutter={[16, 16]}>
+            {stores.map((item) => (
+              <Col xs={24} sm={12} md={8} key={item.id}>
+                <Card
+                  size="small"
+                  style={{
+                    borderRadius: 8,
+                    borderColor: item.id === store.id ? "#1677ff" : undefined,
+                    background: item.status === "archived" ? "#fafafa" : "#fff",
+                  }}
+                  title={
+                    <Space>
+                      <Text strong>{item.name}</Text>
+                      {item.id === store.id && <Tag color="blue">当前选中</Tag>}
+                    </Space>
+                  }
+                  extra={
+                    <Tag color={item.status === "active" ? "success" : "default"}>
+                      {item.status === "active" ? "营业中" : "已停用"}
+                    </Tag>
+                  }
+                >
+                  <Space wrap style={{ marginTop: 8 }}>
+                    <Button size="small" icon={<EditOutlined />} onClick={() => onEditStore(item)}>
+                      重命名
+                    </Button>
+                    {item.status === "active" ? (
+                      <Popconfirm title="确定停用该门店？历史月份工资仍可查阅。" onConfirm={() => onArchiveStore(item)}>
+                        <Button size="small" danger icon={<StopOutlined />}>
+                          停用门店
+                        </Button>
+                      </Popconfirm>
+                    ) : (
+                      <Button size="small" type="primary" ghost icon={<ReloadOutlined />} onClick={() => onRestoreStore(item.id)}>
+                        恢复营业
+                      </Button>
+                    )}
+                  </Space>
+                </Card>
+              </Col>
+            ))}
+          </Row>
+        </Card>
+      ),
+    },
+    {
+      key: "rules",
+      label: <Space><SettingOutlined /> 算薪规则参数</Space>,
+      children: (
+        <Row gutter={[24, 24]}>
+          <Col xs={24} lg={15}>
+            <Card title={`${store.name} 算薪计算参数设置`} style={{ borderRadius: 8 }}>
+              <Row gutter={[16, 16]}>
+                {configFields.map(({ key, label, hint, min, getPreview }) => {
+                  const currentValue = drafts[key] ?? store.config[key];
+                  return (
+                    <Col xs={24} sm={12} key={key}>
+                      <Form.Item
+                        label={label}
+                        help={errors[key] || hint}
+                        validateStatus={errors[key] ? "error" : ""}
+                        style={{ marginBottom: 12 }}
+                      >
+                        <InputNumber
+                          min={min}
+                          step={0.5}
+                          style={{ width: "100%" }}
+                          value={currentValue}
+                          onChange={(val) => setDrafts((current) => ({ ...current, [key]: val }))}
+                          onBlur={() => commitConfig(key, drafts[key])}
+                        />
+                      </Form.Item>
+                      <div style={{ background: "#f8fafc", padding: "6px 10px", borderRadius: 4, fontSize: 12, color: "#1677ff", marginBottom: 16 }}>
+                        <BulbOutlined style={{ marginRight: 6 }} />影响预览: {getPreview(currentValue, employeeCount)}
+                      </div>
+                    </Col>
+                  );
+                })}
+              </Row>
+            </Card>
+          </Col>
+
+          <Col xs={24} lg={9}>
+            <Card title="算薪规则修改历史记录" style={{ borderRadius: 8 }}>
+              {ruleHistory.length === 0 ? (
+                <Text type="secondary">本门店暂无规则修改记录。</Text>
+              ) : (
+                <Timeline
+                  items={ruleHistory.slice(0, 10).map((record) => ({
+                    color: "blue",
+                    children: (
+                      <div>
+                        <Text strong>{record.label}</Text>
+                        <br />
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {new Date(record.at).toLocaleString("zh-CN")}
+                        </Text>
+                        <div style={{ fontSize: 13, marginTop: 2 }}>
+                          <span style={{ color: "#8c8c8c" }}>旧值 {record.previousValue}</span> → <Text strong style={{ color: "#1677ff" }}>新值 {record.newValue}</Text>
+                        </div>
+                      </div>
+                    ),
+                  }))}
+                />
+              )}
+            </Card>
+          </Col>
+        </Row>
+      ),
+    },
+    {
+      key: "security",
+      label: <Space><SafetyCertificateOutlined /> 数据安全与备份恢复</Space>,
+      children: (
+        <Space direction="vertical" size="large" style={{ width: "100%" }}>
+          {/* 应用访问保护锁 */}
+          {desktopApi && (
+            <Card title="应用访问保护锁" style={{ borderRadius: 8 }}>
+              <Row gutter={[24, 24]} align="middle">
+                <Col xs={24} md={12}>
+                  <Text style={{ fontSize: 13, color: "#595959", display: "block", marginBottom: 8 }}>
+                    为应用设置 PIN 后，打开或锁定时需要输入 PIN 才能进入。
+                  </Text>
+                  <Tag color={lockPinSet ? "success" : "default"} style={{ marginRight: 8 }}>
+                    {lockPinSet ? "PIN 已设置" : "PIN 未设置"}
+                  </Tag>
+                  <Space wrap>
+                    {lockPinSet ? (
+                      <>
+                        <Button size="small" onClick={() => setPinModal({ mode: "set", pin: "", confirmPin: "", oldPin: "" })}>修改 PIN</Button>
+                        <Button size="small" onClick={() => setPinModal({ mode: "clear", pin: "", confirmPin: "", oldPin: "" })}>清除 PIN</Button>
+                        <Button size="small" icon={<LockOutlined />} onClick={handleManualLock}>立即锁定</Button>
+                      </>
+                    ) : (
+                      <Button size="small" type="primary" icon={<LockOutlined />} onClick={() => setPinModal({ mode: "set-first", pin: "", confirmPin: "" })}>
+                        设置 PIN
+                      </Button>
+                    )}
+                  </Space>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Alert
+                    type="info"
+                    showIcon
+                    message="无加密纯本地存储"
+                    description="全部门店、员工和薪资数据均保存在本地设备中。建议每月结账封账后导出数据备份以防设备故障。"
+                  />
+                </Col>
+              </Row>
+            </Card>
+          )}
+
+          {/* 主备份卡片 */}
+          <Card title="本地数据安全与恢复点" style={{ borderRadius: 8 }}>
+            <Row gutter={[24, 24]}>
+              <Col xs={24} md={12}>
+                <Card size="small" style={{ background: "#f6ffed", borderColor: "#b7eb8f", borderRadius: 8 }}>
+                  <Text strong style={{ fontSize: 15, display: "block", color: "#389e0d" }}>
+                    自动恢复点机制
+                  </Text>
+                  <Text style={{ fontSize: 13, color: "#595959", marginTop: 4, display: "block" }}>
+                    上次自动备份：{latestBackup ? new Date(latestBackup.createdAt).toLocaleString("zh-CN") : "今天已就绪"}
+                  </Text>
+                  <Button
+                    type="primary"
+                    style={{ backgroundColor: "#52c41a", borderColor: "#52c41a", marginTop: 12 }}
+                    icon={<CloudUploadOutlined />}
+                    disabled={!autoBackupAvailable || autoBackupBusy}
+                    onClick={onCreateAutoBackup}
+                  >
+                    {autoBackupBusy ? "创建中…" : "立即创建本地恢复点"}
+                  </Button>
+                </Card>
+              </Col>
+
+              <Col xs={24} md={12}>
+                <Card size="small" style={{ borderRadius: 8 }}>
+                  <Text strong style={{ fontSize: 15, display: "block" }}>
+                    手动文件备份与导入
+                  </Text>
+                  <Space wrap style={{ marginTop: 12 }}>
+                    <Button icon={<ExportOutlined />} onClick={() => onExportBackup()}>导出备份 JSON</Button>
+                    <Button icon={<LockOutlined />} onClick={() => setPassphraseModal({ mode: "export" })}>加密导出</Button>
+                    <Button icon={<ImportOutlined />} onClick={() => backupInputRef.current?.click()}>从文件恢复数据</Button>
+                  </Space>
+                </Card>
+              </Col>
+            </Row>
+
+            <input
+              ref={backupInputRef}
+              style={{ display: "none" }}
+              type="file"
+              accept="application/json,.json"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file) return;
+                file.text().then((raw) => {
+                  try {
+                    const parsed = JSON.parse(raw);
+                    if (parsed.protected) {
+                      setPassphraseModal({ mode: "import", file });
+                    } else {
+                      onImportBackup(file);
+                    }
+                  } catch {
+                    onImportBackup(file);
+                  }
+                });
+              }}
+            />
+          </Card>
+
+          {/* 自动恢复点列表 */}
+          <Card title="自动恢复点列表" style={{ borderRadius: 8 }}>
+            {autoBackups.length === 0 ? (
+              <Text type="secondary">暂无自动恢复点。</Text>
+            ) : (
+              <Space direction="vertical" style={{ width: "100%" }}>
+                {autoBackups.slice(0, 8).map((backup) => (
+                  <div
+                    key={backup.id}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "8px 12px",
+                      background: "#f8fafc",
+                      borderRadius: 8,
+                    }}
+                  >
+                    <div>
+                      <Text strong>{new Date(backup.createdAt).toLocaleString("zh-CN")}</Text>
+                      <br />
+                      <Text type="secondary" style={{ fontSize: 12 }}>{backup.reasonLabel}</Text>
+                    </div>
+                    <Popconfirm
+                      title="恢复该恢复点？"
+                      description="当前工作区数据将被该恢复点覆盖，建议先导出当前备份。"
+                      onConfirm={() => onRestoreAutoBackup(backup.id)}
+                      okText="确认恢复"
+                      cancelText="取消"
+                    >
+                      <Button size="small">恢复</Button>
+                    </Popconfirm>
+                  </div>
+                ))}
+              </Space>
+            )}
+          </Card>
+
+          {/* 危险区域隔离 */}
+          <Card
+            title={<Space><WarningOutlined style={{ color: "#ff4d4f" }} /><Text type="danger" strong>危险区 - 重置演示工作区</Text></Space>}
+            style={{ borderRadius: 8, borderColor: "#ffccc7" }}
+          >
+            <Paragraph type="secondary" style={{ fontSize: 13, marginBottom: 16 }}>
+              此功能将清空当前本地所有实际门店与员工数据，并将系统恢复为泛化演示店铺与示例员工。此操作不可逆，请务必先导出当前备份。
+            </Paragraph>
+            <Popconfirm
+              title="确定恢复为默认演示工作区？"
+              description="当前本地工作区数据将被覆盖，确认继续吗？"
+              onConfirm={onResetDemoWorkspace}
+              okText="确认重置"
+              okButtonProps={{ danger: true }}
+              cancelText="取消"
+            >
+              <Button danger icon={<ExclamationCircleOutlined />}>
+                恢复泛化演示工作区
+              </Button>
+            </Popconfirm>
+          </Card>
+        </Space>
+      ),
+    },
+  ];
+
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
       <PageHeader
         eyebrow="门店管理"
         title="门店、算薪规则与数据安全"
-        description="集中维护门店列表、本金计算参数、访问密码与离线数据备份。"
+        description="维护门店营业状态、通俗化算薪参数、访问锁与本地离线备份。"
         actions={
           <Button type="primary" size="large" icon={<ShopOutlined />} onClick={onCreateStore}>
             新增门店
@@ -125,248 +454,109 @@ export function SettingsPage({
         }
       />
 
-      <Card title="门店管理 (营业与停用)" style={{ borderRadius: 8 }}>
-        <Row gutter={[16, 16]}>
-          {stores.map((item) => (
-            <Col xs={24} sm={12} md={8} key={item.id}>
-              <Card
-                size="small"
-                style={{
-                  borderRadius: 8,
-                  borderColor: item.id === store.id ? "#1677ff" : undefined,
-                  background: item.status === "archived" ? "#fafafa" : "#fff",
-                }}
-                title={
-                  <Space>
-                    <Text strong>{item.name}</Text>
-                    {item.id === store.id && <Tag color="blue">当前</Tag>}
-                  </Space>
-                }
-                extra={
-                  <Tag color={item.status === "active" ? "success" : "default"}>
-                    {item.status === "active" ? "营业中" : "已停用"}
-                  </Tag>
-                }
-              >
-                <Space wrap style={{ marginTop: 8 }}>
-                  <Button size="small" icon={<EditOutlined />} onClick={() => onEditStore(item)}>
-                    改名
-                  </Button>
-                  {item.status === "active" ? (
-                    <Popconfirm title="确定停用该门店？历史工资将保持只读可查。" onConfirm={() => onArchiveStore(item)}>
-                      <Button size="small" danger icon={<StopOutlined />}>
-                        停用
-                      </Button>
-                    </Popconfirm>
-                  ) : (
-                    <Button size="small" type="primary" ghost icon={<ReloadOutlined />} onClick={() => onRestoreStore(item.id)}>
-                      恢复营业
-                    </Button>
-                  )}
-                </Space>
-              </Card>
-            </Col>
-          ))}
-        </Row>
-      </Card>
+      <Tabs items={tabItems} size="large" type="card" style={{ width: "100%" }} />
 
-      <Row gutter={[24, 24]}>
-        <Col xs={24} lg={14}>
-          <Card title={`${store.name} 薪酬计算参数`} style={{ borderRadius: 8 }}>
-            <Row gutter={[16, 16]}>
-              {configFields.map(([key, label, hint, min]) => (
-                <Col xs={24} sm={12} key={key}>
-                  <Form.Item
-                    label={label}
-                    help={errors[key] || hint}
-                    validateStatus={errors[key] ? "error" : ""}
-                    style={{ marginBottom: 12 }}
-                  >
-                    <InputNumber
-                      min={min}
-                      step={0.5}
-                      style={{ width: "100%" }}
-                      value={drafts[key] ?? store.config[key]}
-                      onChange={(val) => setDrafts((current) => ({ ...current, [key]: val }))}
-                      onBlur={() => commitConfig(key, drafts[key])}
-                    />
-                  </Form.Item>
-                </Col>
-              ))}
-            </Row>
-          </Card>
-
-          <Card title="规则变更历史记录" style={{ borderRadius: 8, marginTop: 24 }}>
-            {ruleHistory.length === 0 ? (
-              <Text type="secondary">当前门店还没有规则变更。</Text>
-            ) : (
-              <Timeline
-                items={ruleHistory.slice(0, 8).map((record) => ({
-                  color: "gray",
-                  children: (
-                    <div>
-                      <Text strong>{record.label}</Text>
-                      <br />
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        {new Date(record.at).toLocaleString("zh-CN")} · {record.previousValue} → {record.newValue}
-                      </Text>
-                    </div>
-                  ),
-                }))}
-              />
-            )}
-          </Card>
-        </Col>
-
-        <Col xs={24} lg={10}>
-          <Card title="计算公式与数据安全" style={{ borderRadius: 8 }}>
-            <Alert
-              type="info"
-              message="统一算薪公式"
-              description={
-                <div style={{ fontSize: 13, lineHeight: 1.6 }}>
-                  <strong>实发工资</strong> = 基础工资 - 请假扣减 + 加班工资/夜班补贴 + 全勤/稽核奖励 + 固定社保/饭补 + 特殊调整
-                </div>
-              }
-              style={{ marginBottom: 20 }}
-            />
-
-            {desktopApi && (
-              <div style={{ marginBottom: 20 }}>
-                <Text strong style={{ display: "block", marginBottom: 8 }}>应用访问保护锁</Text>
-                <Space wrap align="center">
-                  <Tag color={lockPinSet ? "success" : "default"}>
-                    {lockPinSet ? "PIN 已设置" : "PIN 未设置"}
-                  </Tag>
-                  {lockPinSet ? (
-                    <>
-                      <Button size="small" onClick={() => setPinModal({ mode: "set", pin: "", confirmPin: "", oldPin: "" })}>修改 PIN</Button>
-                      <Button size="small" onClick={() => setPinModal({ mode: "clear", pin: "", confirmPin: "", oldPin: "" })}>清除 PIN</Button>
-                      <Button size="small" icon={<LockOutlined />} onClick={handleManualLock}>立即锁定</Button>
-                    </>
-                  ) : (
-                    <Button size="small" type="primary" icon={<LockOutlined />} onClick={() => setPinModal({ mode: "set-first", pin: "", confirmPin: "" })}>设置 PIN</Button>
-                  )}
-                </Space>
-              </div>
-            )}
-
-            <Text strong style={{ display: "block", marginBottom: 8 }}>数据备份与恢复点</Text>
-            <Space wrap style={{ marginBottom: 16 }}>
-              <Button icon={<ExportOutlined />} onClick={() => onExportBackup()}>导出备份</Button>
-              <Button icon={<LockOutlined />} onClick={() => setPassphraseModal({ mode: "export" })}>加密导出</Button>
-              <Button icon={<ImportOutlined />} onClick={() => backupInputRef.current?.click()}>从文件恢复</Button>
-              <Button
-                type="primary"
-                ghost
-                icon={<CloudUploadOutlined />}
-                disabled={!autoBackupAvailable || autoBackupBusy}
-                onClick={onCreateAutoBackup}
-              >
-                {autoBackupBusy ? "备份中…" : "立即创建恢复点"}
-              </Button>
-            </Space>
-
-            <input
-              ref={backupInputRef}
-              style={{ display: "none" }}
-              type="file"
-              accept="application/json,.json"
-              onChange={async (event) => {
-                const file = event.target.files?.[0];
-                event.target.value = "";
-                if (!file) return;
-                try {
-                  const raw = await file.text();
-                  const parsed = JSON.parse(raw);
-                  if (parsed.protected) {
-                    setImportPassphraseFile(file);
-                    setImportPassphrase("");
-                  } else {
-                    const backupData = parsed.data || {};
-                    const backupStoresCount = backupData.stores?.length ?? 0;
-                    const backupEmpCount = backupData.employees?.length ?? 0;
-                    setRestoreDiffModal({
-                      file,
-                      version: parsed.version || "未知",
-                      exportedAt: parsed.exportedAt || "未知",
-                      backupStoresCount,
-                      backupEmpCount,
-                      currentStoresCount: stores.length,
-                    });
-                  }
-                } catch {
-                  onImportBackup(file);
-                }
-              }}
-            />
-
-            <List
-              header={<Text type="secondary" style={{ fontSize: 12 }}>自动恢复点列表</Text>}
-              bordered
-              size="small"
-              dataSource={autoBackups}
-              locale={{ emptyText: "暂无自动恢复点。" }}
-              renderItem={(backup) => (
-                <List.Item
-                  actions={[
-                    <Button key="res" size="small" onClick={() => onRestoreAutoBackup(backup.id)}>
-                      恢复
-                    </Button>,
-                  ]}
-                >
-                  <List.Item.Meta
-                    title={new Date(backup.createdAt).toLocaleString("zh-CN")}
-                    description={backup.reasonLabel}
-                  />
-                </List.Item>
-              )}
-              style={{ maxHeight: 200, overflowY: "auto", marginBottom: 16 }}
-            />
-
-            <Button block type="dashed" danger onClick={onResetDemoWorkspace}>
-              恢复泛化演示工作区
-            </Button>
-            <Text type="secondary" style={{ display: "block", marginTop: 8, fontSize: 11, textAlign: "center" }}>
-              当前版本：v{appVersion}
-            </Text>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* 备份恢复前 Diff 对比 Modal */}
-      {restoreDiffModal && (
+      {/* PIN 设置 / 修改 / 清除弹窗 */}
+      {pinModal && (
         <Modal
-          title="恢复数据前 Diff 对比核对"
-          open={true}
-          onCancel={() => setRestoreDiffModal(null)}
-          onOk={() => {
-            onImportBackup(restoreDiffModal.file);
-            setRestoreDiffModal(null);
-          }}
-          okText="确认覆盖并恢复数据"
-          cancelText="取消"
+          title={
+            pinModal.mode === "set" ? "修改应用 PIN"
+              : pinModal.mode === "clear" ? "清除应用 PIN"
+                : "设置应用 PIN"
+          }
+          open={Boolean(pinModal)}
+          onCancel={() => setPinModal(null)}
+          footer={null}
+          width={420}
         >
-          <Alert
-            type="warning"
-            showIcon
-            icon={<ExclamationCircleOutlined />}
-            message="数据全量覆盖警告"
-            description="确认恢复后，当前本地工作区中的门店、员工和考勤数据将被该备份文件完全替换。"
-            style={{ marginBottom: 16 }}
-          />
-          <Descriptions title="备份与当前数据规格对比" bordered size="small" column={1}>
-            <Descriptions.Item label="备份文件版本">{restoreDiffModal.version}</Descriptions.Item>
-            <Descriptions.Item label="备份导出时间">
-              {restoreDiffModal.exportedAt !== "未知" ? new Date(restoreDiffModal.exportedAt).toLocaleString("zh-CN") : "未知"}
-            </Descriptions.Item>
-            <Descriptions.Item label="门店数量对比">
-              当前 <Text strong>{restoreDiffModal.currentStoresCount}</Text> 家  ➡️  备份 <Text strong style={{ color: "#1677ff" }}>{restoreDiffModal.backupStoresCount}</Text> 家
-            </Descriptions.Item>
-            <Descriptions.Item label="包含员工数据">
-              备份文件中共包含 <Text strong style={{ color: "#1677ff" }}>{restoreDiffModal.backupEmpCount}</Text> 位员工档案与薪资数据
-            </Descriptions.Item>
-          </Descriptions>
+          <form className="modal-form" onSubmit={handlePinSubmit}>
+            {pinModal.mode === "set" && (
+              <label className="field">
+                <span>旧 PIN</span>
+                <Input.Password
+                  autoFocus
+                  maxLength={6}
+                  value={pinModal.oldPin ?? ""}
+                  onChange={(e) => setPinModal((c) => ({ ...c, oldPin: e.target.value.replace(/\D/g, "") }))}
+                  placeholder="输入当前 PIN"
+                />
+              </label>
+            )}
+            <label className="field">
+              <span>{pinModal.mode === "clear" ? "输入当前 PIN 确认清除" : "新 PIN (4-6 位数字)"}</span>
+              <Input.Password
+                autoFocus={pinModal.mode !== "set"}
+                maxLength={6}
+                value={pinModal.pin ?? ""}
+                onChange={(e) => setPinModal((c) => ({ ...c, pin: e.target.value.replace(/\D/g, "") }))}
+                placeholder="输入 4-6 位数字"
+              />
+            </label>
+            {pinModal.mode !== "clear" && (
+              <label className="field">
+                <span>再次输入确认</span>
+                <Input.Password
+                  maxLength={6}
+                  value={pinModal.confirmPin ?? ""}
+                  onChange={(e) => setPinModal((c) => ({ ...c, confirmPin: e.target.value.replace(/\D/g, "") }))}
+                  placeholder="再次输入 PIN"
+                />
+              </label>
+            )}
+            {pinError && <Alert type="error" showIcon message={pinError} />}
+            <div className="modal-actions">
+              <Button onClick={() => setPinModal(null)}>取消</Button>
+              <Button type="primary" htmlType="submit" loading={pinBusy}>
+                确认
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* 加密备份导出 / 加密备份导入口令弹窗 */}
+      {passphraseModal && (
+        <Modal
+          title={passphraseModal.mode === "import" ? "此备份已加密" : "加密导出备份"}
+          open={Boolean(passphraseModal)}
+          onCancel={() => setPassphraseModal(null)}
+          footer={null}
+          width={420}
+        >
+          <form
+            className="modal-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (passphraseModal.mode === "import") {
+                onImportBackup(passphraseModal.file, importPassphrase);
+              } else {
+                onExportBackup(importPassphrase);
+              }
+              setPassphraseModal(null);
+              setImportPassphrase("");
+            }}
+          >
+            <p className="modal-copy">
+              {passphraseModal.mode === "import"
+                ? "该备份文件使用口令加密，请输入导出时设置的口令以解密恢复。"
+                : "设置口令后，导出的备份文件将加密保存，恢复时需要输入该口令。"}
+            </p>
+            <label className="field">
+              <span>备份口令</span>
+              <Input.Password
+                autoFocus
+                value={importPassphrase}
+                onChange={(e) => setImportPassphrase(e.target.value)}
+                placeholder="输入口令"
+              />
+            </label>
+            <div className="modal-actions">
+              <Button onClick={() => { setPassphraseModal(null); setImportPassphrase(""); }}>取消</Button>
+              <Button type="primary" htmlType="submit" disabled={!importPassphrase}>
+                确认
+              </Button>
+            </div>
+          </form>
         </Modal>
       )}
     </Space>
