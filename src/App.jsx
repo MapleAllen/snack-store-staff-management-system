@@ -13,7 +13,6 @@ import {
   createEmployeeDraft,
   csvEscape,
   formatCurrency,
-  formatTimestamp,
   getEmployeeAssignments,
   getEmployeesForStore,
   getMonthlyStoreRecord,
@@ -52,18 +51,51 @@ import {
 } from "../shared/backup-format.js";
 import { loadWorkspace, saveWorkspace, getStorageStatus, isDesktopStorage } from "./storageAdapter.js";
 
+import {
+  Layout,
+  Menu,
+  Select,
+  Tag,
+  Badge,
+  Button,
+  Space,
+  Typography,
+  Tooltip,
+  Alert,
+  ConfigProvider,
+} from "antd";
+import {
+  HomeOutlined,
+  TeamOutlined,
+  CalendarOutlined,
+  PayCircleOutlined,
+  FileTextOutlined,
+  SettingOutlined,
+  ShopOutlined,
+  LockOutlined,
+  CheckCircleOutlined,
+  WarningOutlined,
+} from "@ant-design/icons";
+
+const { Header, Content, Sider } = Layout;
+const { Text } = Typography;
+
+
 const APP_VERSION = __APP_VERSION__;
 const NAV_ITEMS = [
-  { id: "home", label: "经营总览" },
-  { id: "employees", label: "员工管理" },
-  { id: "attendance", label: "考勤管理" },
-  { id: "payroll", label: "工资管理" },
-  { id: "reports", label: "报表中心" },
-  { id: "settings", label: "门店设置" },
+  { key: "home", id: "home", label: "经营总览", icon: <HomeOutlined /> },
+  { key: "employees", id: "employees", label: "员工管理", icon: <TeamOutlined /> },
+  { key: "attendance", id: "attendance", label: "考勤管理", icon: <CalendarOutlined /> },
+  { key: "payroll", id: "payroll", label: "工资管理", icon: <PayCircleOutlined /> },
+  { key: "reports", id: "reports", label: "报表中心", icon: <FileTextOutlined /> },
+  { key: "settings", id: "settings", label: "门店管理", icon: <SettingOutlined /> },
+
 ];
 
+
 function makeId(prefix) {
-  const value = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  const value = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
   return `${prefix}-${value}`;
 }
 
@@ -129,7 +161,9 @@ export function App() {
   const [activeStoreId, setActiveStoreId] = useState("");
   const [activeMonth, setActiveMonth] = useState(currentMonth);
   const [activePage, setActivePage] = useState("home");
+  const [collapsed, setCollapsed] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+
   const [notice, setNotice] = useState("");
   const [employeeModal, setEmployeeModal] = useState(null);
   const [adjustmentModal, setAdjustmentModal] = useState(null);
@@ -747,32 +781,128 @@ export function App() {
 
   if (!activeStoreView) return <div className="app-empty">没有可用门店，请从备份恢复数据。</div>;
 
-  return (
-    <div className="app-shell">
-      <main className="workspace">
-        <header className="topbar">
-          <div className="topbar__brand"><img className="topbar__logo" src="/app-icon.svg" alt="" /><div><strong>门店工资助手</strong><span>人员与工资一站式管理</span></div></div>
-          <nav className="topbar__nav" aria-label="主导航">
-            {NAV_ITEMS.map((item) => <button key={item.id} aria-current={item.id === activePage ? "page" : undefined} className={item.id === activePage ? "topbar__nav-item is-active" : "topbar__nav-item"} type="button" onClick={() => setActivePage(item.id)}>{item.label}</button>)}
-          </nav>
-          <label className="topbar__nav-select"><span>当前功能</span><select value={activePage} onChange={(event) => setActivePage(event.target.value)}>{NAV_ITEMS.map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}</select></label>
-          <div className="topbar__aside">
-            <div className="topbar__feature">
-              <span>当前功能</span>
-              <strong>{currentFeature.label}</strong>
-            </div>
-            <label className="store-select"><span>当前门店</span><select aria-label="当前门店" value={activeStore.id} onChange={(event) => setActiveStoreId(event.target.value)}>{activeStores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label>
-            <div className={saveState.status === "error" ? "autosave-status is-error" : "autosave-status"}><span>{saveState.status === "error" ? "保存失败" : "已自动保存"}</span><strong>{saveState.savedAt ? formatTimestamp(saveState.savedAt) : "正在保存"}</strong></div>
-          </div>
-        </header>
+  const formattedSaveTime = saveState.savedAt
+    ? `已保存 ${new Date(saveState.savedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`
+    : "已保存";
 
-        {activePage === "home" ? <HomePage workspace={workspace} activeMonth={activeMonth} onNavigate={setActivePage} onSelectStore={setActiveStoreId} /> : null}
-        {activePage === "employees" ? <EmployeesPage workspace={workspace} store={activeStore} currentMonth={currentMonth} onCreate={() => setEmployeeModal({ mode: "create", draft: createEmployeeDraft() })} onEdit={(employee) => setEmployeeModal({ mode: "edit", employeeId: employee.id, draft: createEmployeeDraft(employee) })} onToggleResignation={handleToggleResignation} onTransfer={openTransferModal} /> : null}
-        {activePage === "attendance" ? <AttendancePage store={activeStore} activeMonth={activeMonth} rows={payrollRows} patchEntry={patchMonthlyEntry} toggleComplete={toggleEntryComplete} isLocked={isLocked} onNavigate={setActivePage} /> : null}
-        {activePage === "reports" ? <ReportsPage workspace={workspace} activeMonth={activeMonth} setActiveMonth={setActiveMonth} onSelectStore={setActiveStoreId} onNavigate={setActivePage} /> : null}
-        {activePage === "settings" ? <SettingsPage store={activeStore} stores={workspace.stores} patchConfig={patchStoreConfig} appVersion={APP_VERSION} onExportBackup={exportWorkspaceBackup} onImportBackup={prepareWorkspaceRestore} onCreateStore={() => setStoreModal({ mode: "create", name: "" })} onEditStore={(store) => setStoreModal({ mode: "edit", storeId: store.id, name: store.name })} onArchiveStore={requestArchiveStore} onRestoreStore={restoreStore} autoBackups={autoBackups} autoBackupAvailable={Boolean(desktopApi)} autoBackupBusy={autoBackupBusy} onCreateAutoBackup={() => createAutomaticBackup(BACKUP_REASONS.MANUAL)} onRestoreAutoBackup={prepareAutomaticRestore} onRequestLock={() => setAppLocked(true)} onResetDemoWorkspace={() => setDemoResetModal(true)} ruleHistory={(workspace.ruleHistory ?? []).filter((record) => record.storeId === activeStore.id)} /> : null}
-        {activePage === "payroll" ? <PayrollPage activeStore={activeStoreView} activeMonth={activeMonth} setActiveMonth={setActiveMonth} exportCurrentMonth={exportCurrentMonth} totalNetSalary={totalNetSalary} forecastNetSalary={forecastNetSalary} payrollRows={payrollRows} touchedRows={touchedRows} exceptionCount={exceptionCount} completionRate={completionRate} monthlyStore={monthlyStore} selectedRow={selectedRow} setSelectedEmployeeId={setSelectedEmployeeId} patchMonthlyEntry={patchMonthlyEntry} toggleEntryComplete={toggleEntryComplete} setEmployeeModal={setEmployeeModal} openAdjustmentModal={openAdjustmentModal} isLocked={isLocked} onClosePayroll={requestClosePayroll} onUnlockPayroll={() => setUnlockModal({ reason: "" })} /> : null}
-      </main>
+  return (
+    <ConfigProvider
+      theme={{
+        token: {
+          colorPrimary: "#1677ff",
+          colorSuccess: "#52c41a",
+          colorWarning: "#faad14",
+          colorError: "#ff4d4f",
+          borderRadius: 8,
+          fontFamily: '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", -apple-system, sans-serif',
+        },
+      }}
+    >
+      <Layout style={{ minHeight: "100vh" }}>
+        <Sider
+          collapsible
+          collapsed={collapsed}
+          onCollapse={(value) => setCollapsed(value)}
+          theme="dark"
+          width={220}
+          style={{
+            overflow: "auto",
+            height: "100vh",
+            position: "fixed",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            zIndex: 1001,
+          }}
+        >
+          <div
+            style={{
+              height: 64,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: collapsed ? "center" : "flex-start",
+              padding: collapsed ? "0" : "0 20px",
+              gap: 12,
+              background: "#002140",
+              overflow: "hidden",
+            }}
+          >
+            <img src="/app-icon.svg" alt="logo" style={{ width: 32, height: 32, flexShrink: 0 }} />
+            {!collapsed && (
+              <div style={{ color: "#fff", lineHeight: 1.2, whiteSpace: "nowrap" }}>
+                <strong style={{ fontSize: 16, display: "block", color: "#fff" }}>门店工资助手</strong>
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.65)" }}>人员与工资一站式管理</span>
+              </div>
+            )}
+          </div>
+
+          <Menu
+            theme="dark"
+            mode="inline"
+            selectedKeys={[activePage]}
+            onClick={({ key }) => setActivePage(key)}
+            items={NAV_ITEMS}
+            style={{ borderRight: 0, marginTop: 8 }}
+          />
+        </Sider>
+
+        <Layout style={{ marginLeft: collapsed ? 80 : 220, transition: "all 0.2s", background: "#f0f2f5" }}>
+          <Header
+            style={{
+              padding: "0 24px",
+              background: "#fff",
+              boxShadow: "0 1px 4px rgba(0,21,41,0.08)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              position: "sticky",
+              top: 0,
+              zIndex: 1000,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <Typography.Title level={4} style={{ margin: 0 }}>
+                {currentFeature?.label}
+              </Typography.Title>
+            </div>
+
+            <Space size="middle">
+              <Select
+                aria-label="当前门店"
+                value={activeStore.id}
+                onChange={(val) => setActiveStoreId(val)}
+                style={{ width: 160 }}
+                options={activeStores.map((s) => ({ value: s.id, label: s.name }))}
+                prefix={<ShopOutlined />}
+              />
+              {saveState.status === "error" ? (
+                <Tag color="error">保存失败，请检查导出</Tag>
+              ) : (
+                <Tag color="success" icon={<CheckCircleOutlined />}>
+                  {formattedSaveTime}
+                </Tag>
+              )}
+              <Tooltip title="锁定应用">
+                <Button
+                  type="text"
+                  icon={<LockOutlined />}
+                  onClick={() => setAppLocked(true)}
+                />
+              </Tooltip>
+            </Space>
+          </Header>
+
+          <Content style={{ padding: "24px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
+            {activePage === "home" ? <HomePage workspace={workspace} activeMonth={activeMonth} onNavigate={setActivePage} onSelectStore={setActiveStoreId} /> : null}
+            {activePage === "employees" ? <EmployeesPage workspace={workspace} store={activeStore} currentMonth={currentMonth} onCreate={() => setEmployeeModal({ mode: "create", draft: createEmployeeDraft() })} onEdit={(employee) => setEmployeeModal({ mode: "edit", employeeId: employee.id, draft: createEmployeeDraft(employee) })} onToggleResignation={handleToggleResignation} onTransfer={openTransferModal} /> : null}
+            {activePage === "attendance" ? <AttendancePage store={activeStore} activeMonth={activeMonth} rows={payrollRows} patchEntry={patchMonthlyEntry} toggleComplete={toggleEntryComplete} isLocked={isLocked} onNavigate={setActivePage} /> : null}
+            {activePage === "reports" ? <ReportsPage workspace={workspace} activeMonth={activeMonth} setActiveMonth={setActiveMonth} onSelectStore={setActiveStoreId} onNavigate={setActivePage} /> : null}
+            {activePage === "settings" ? <SettingsPage store={activeStoreView} stores={workspace.stores} patchConfig={patchStoreConfig} onExportBackup={exportWorkspaceBackup} onImportBackup={prepareWorkspaceRestore} onCreateStore={() => setStoreModal({ mode: "create", name: "" })} onEditStore={(store) => setStoreModal({ mode: "edit", storeId: store.id, name: store.name })} onArchiveStore={requestArchiveStore} onRestoreStore={restoreStore} autoBackups={autoBackups} autoBackupAvailable={Boolean(desktopApi)} autoBackupBusy={autoBackupBusy} onCreateAutoBackup={() => createAutomaticBackup(BACKUP_REASONS.MANUAL)} onRestoreAutoBackup={prepareAutomaticRestore} onRequestLock={() => setAppLocked(true)} onResetDemoWorkspace={() => setDemoResetModal(true)} ruleHistory={(workspace.ruleHistory ?? []).filter((record) => record.storeId === activeStore.id)} /> : null}
+            {activePage === "payroll" ? <PayrollPage activeStore={activeStoreView} activeMonth={activeMonth} setActiveMonth={setActiveMonth} exportCurrentMonth={exportCurrentMonth} totalNetSalary={totalNetSalary} forecastNetSalary={forecastNetSalary} payrollRows={payrollRows} touchedRows={touchedRows} exceptionCount={exceptionCount} completionRate={completionRate} monthlyStore={monthlyStore} selectedRow={selectedRow} setSelectedEmployeeId={setSelectedEmployeeId} patchMonthlyEntry={patchMonthlyEntry} toggleEntryComplete={toggleEntryComplete} setEmployeeModal={setEmployeeModal} openAdjustmentModal={openAdjustmentModal} isLocked={isLocked} onClosePayroll={requestClosePayroll} onUnlockPayroll={() => setUnlockModal({ reason: "" })} /> : null}
+          </Content>
+        </Layout>
+      </Layout>
+
 
       {notice ? <div className="toast" role="status" aria-live="polite">{notice}</div> : null}
 
@@ -782,7 +912,7 @@ export function App() {
 
       {employeeModal ? <Modal title={employeeModal.mode === "create" ? "新增员工" : "编辑员工姓名"} onClose={() => setEmployeeModal(null)}><form className="modal-form" onSubmit={submitEmployee}><label className="field"><span>姓名</span><input autoFocus value={employeeModal.draft.name} onChange={(event) => setEmployeeModal((current) => ({ ...current, draft: { ...current.draft, name: event.target.value } }))} /></label><p className="modal-copy">基础工资、加班时薪和全勤奖金只能在工资管理的调薪记录中修改。</p><ModalActions onCancel={() => setEmployeeModal(null)} label="保存员工" /></form></Modal> : null}
 
-      {adjustmentModal ? <Modal title={adjustmentModal.mode === "initial" ? "设置初始薪资" : "新增调薪记录"} onClose={() => setAdjustmentModal(null)}><form className="modal-form modal-form--wide" onSubmit={submitAdjustment}><label className="field"><span>员工</span><select value={adjustmentModal.draft.employeeId} onChange={(event) => { const employee = activeEmployees.find((item) => item.id === event.target.value); setAdjustmentModal((current) => ({ ...current, mode: employee?.salaryConfigured ? "adjustment" : "initial", draft: { ...createAdjustmentDraft(employee), date: current.draft.date, notes: current.draft.notes } })); }}>{activeEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></label><label className="field"><span>调整日期</span><input type="date" value={adjustmentModal.draft.date} onChange={(event) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, date: event.target.value } }))} /></label><div className="adjustment-grid"><div className="adjustment-grid__head">当前值</div><div className="adjustment-grid__head">调整后</div>{EMPLOYEE_FIELDS.map((field) => { const employee = activeEmployees.find((item) => item.id === adjustmentModal.draft.employeeId); const old = employee?.[field.key] ?? 0; return <div className="adjustment-row" key={field.key}><div className="adjustment-row__old"><span>{field.label}</span><strong>{field.key === "overtimeRate" ? `${old} / 小时` : formatCurrency(old)}</strong></div><label className="field adjustment-row__new"><span>{field.label}</span><input type="number" min={field.key === "baseSalary" ? "0.01" : "0"} step={field.step} value={adjustmentModal.draft.values?.[field.key] ?? ""} onChange={(event) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, values: { ...current.draft.values, [field.key]: event.target.value } } }))} /></label></div>; })}</div><label className="field"><span>备注</span><textarea value={adjustmentModal.draft.notes} onChange={(event) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, notes: event.target.value } }))} placeholder={adjustmentModal.mode === "initial" ? "例如：入职初始薪资" : "说明本次调整原因"} /></label><ModalActions onCancel={() => setAdjustmentModal(null)} label={adjustmentModal.mode === "initial" ? "确认初始薪资" : "保存记录"} /></form></Modal> : null}
+      {adjustmentModal ? <Modal title={adjustmentModal.mode === "initial" ? "设置初始薪资" : "新增调薪记录"} width={700} onClose={() => setAdjustmentModal(null)}><form className="modal-form modal-form--wide" onSubmit={submitAdjustment}><label className="field"><span>员工</span><select value={adjustmentModal.draft.employeeId} onChange={(event) => { const employee = activeEmployees.find((item) => item.id === event.target.value); setAdjustmentModal((current) => ({ ...current, mode: employee?.salaryConfigured ? "adjustment" : "initial", draft: { ...createAdjustmentDraft(employee), date: current.draft.date, notes: current.draft.notes } })); }}>{activeEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></label><label className="field"><span>调整日期</span><input type="date" value={adjustmentModal.draft.date} onChange={(event) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, date: event.target.value } }))} /></label><div className="adjustment-grid"><div className="adjustment-grid__head">当前值</div><div className="adjustment-grid__head">调整后</div>{EMPLOYEE_FIELDS.map((field) => { const employee = activeEmployees.find((item) => item.id === adjustmentModal.draft.employeeId); const old = employee?.[field.key] ?? 0; return <div className="adjustment-row" key={field.key}><div className="adjustment-row__old"><span>{field.label}</span><strong>{field.key === "overtimeRate" ? `${old} / 小时` : formatCurrency(old)}</strong></div><label className="field adjustment-row__new"><span>{field.label}</span><input type="number" min={field.key === "baseSalary" ? "0.01" : "0"} step={field.step} value={adjustmentModal.draft.values?.[field.key] ?? ""} onChange={(event) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, values: { ...current.draft.values, [field.key]: event.target.value } } }))} /></label></div>; })}</div><label className="field"><span>备注</span><textarea value={adjustmentModal.draft.notes} onChange={(event) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, notes: event.target.value } }))} placeholder={adjustmentModal.mode === "initial" ? "例如：入职初始薪资" : "说明本次调整原因"} /></label><ModalActions onCancel={() => setAdjustmentModal(null)} label={adjustmentModal.mode === "initial" ? "确认初始薪资" : "保存记录"} /></form></Modal> : null}
 
       {transferModal ? <Modal title="员工调店" onClose={() => setTransferModal(null)}><form className="modal-form" onSubmit={submitTransfer}><div className="modal-summary"><strong>{transferModal.employee.name}</strong><span>当前门店：{activeStore.name}</span></div><label className="field"><span>目标门店</span><select value={transferModal.targetStoreId} onChange={(event) => setTransferModal((current) => ({ ...current, targetStoreId: event.target.value }))}>{activeStores.filter((store) => store.id !== activeStore.id).map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label><label className="field"><span>生效月份</span><input type="month" min={currentMonth} value={transferModal.effectiveMonth} onChange={(event) => setTransferModal((current) => ({ ...current, effectiveMonth: event.target.value }))} /></label><label className="field"><span>调店备注</span><textarea value={transferModal.notes} onChange={(event) => setTransferModal((current) => ({ ...current, notes: event.target.value }))} placeholder="例如：新店开业支援、长期调任" /></label><ModalActions onCancel={() => setTransferModal(null)} label="保存调店计划" /></form></Modal> : null}
 
@@ -825,9 +955,10 @@ export function App() {
       {restoreModal ? <Modal title="恢复备份数据" onClose={() => setRestoreModal(null)}><div className="modal-form"><div className="modal-summary"><strong>即将覆盖当前工资系统数据</strong><span>备份版本：{restoreModal.version ?? "未知"} · 门店数量：{restoreModal.storeCount} 家</span><span>导出时间：{restoreModal.exportedAt ? new Date(restoreModal.exportedAt).toLocaleString("zh-CN") : "未知"}</span></div><p className="modal-copy">旧版备份会自动升级，恢复后保留全部门店、员工及工资记录。</p><div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setRestoreModal(null)}>取消</button><button className="primary-button" type="button" onClick={confirmWorkspaceRestore}>确认恢复</button></div></div></Modal> : null}
 
       {demoResetModal ? <Modal title="恢复泛化演示工作区" onClose={() => setDemoResetModal(false)}><div className="modal-form"><div className="modal-summary"><strong>即将重置为默认演示数据</strong><span>会恢复为泛化门店、虚构员工和示例金额。</span><span>当前本地工作区会被覆盖；如桌面版可用，将先创建恢复点。</span></div><p className="modal-copy">这个操作不会自动迁移旧示例门店名，而是直接回到默认演示工作区。</p><div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setDemoResetModal(false)}>取消</button><button className="primary-button" type="button" onClick={confirmDemoWorkspaceReset}>确认恢复演示数据</button></div></div></Modal> : null}
-    </div>
+    </ConfigProvider>
   );
 }
+
 
 function ModalActions({ onCancel, label }) {
   return <div className="modal-actions"><button className="secondary-button" type="button" onClick={onCancel}>取消</button><button className="primary-button" type="submit">{label}</button></div>;
