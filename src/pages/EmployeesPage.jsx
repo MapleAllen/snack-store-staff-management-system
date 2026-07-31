@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Card, Table, Tag, Button, Space, Input, Select, Row, Col, Timeline, Typography, Avatar, Popconfirm, Drawer, Descriptions } from "antd";
+import { Card, Table, Tag, Button, Space, Input, Row, Col, Typography, Avatar, Popconfirm, Drawer, Descriptions, Segmented, Timeline } from "antd";
 import {
   PlusOutlined,
   EditOutlined,
@@ -7,11 +7,9 @@ import {
   UserDeleteOutlined,
   UserAddOutlined,
   SearchOutlined,
-  UserOutlined,
   HistoryOutlined,
 } from "@ant-design/icons";
 import { PageHeader } from "../components/PageHeader.jsx";
-import { SectionHeading } from "../components/SectionHeading.jsx";
 import { formatCurrency, getAssignmentAtMonth, getEmployeeAssignments, getEmployeesWithStoreHistory } from "../payrollLogic.js";
 
 const { Text, Title, Paragraph } = Typography;
@@ -35,8 +33,15 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
     return { employee, currentAssignment, storeHistory, currentHere, plannedOut, plannedIn };
   }).sort((a, b) => Number(b.currentHere) - Number(a.currentHere));
 
+  // 统计指标数据
+  const activeCount = cards.filter((c) => c.currentHere && !c.employee.isResigned).length;
+  const pendingSalaryCount = cards.filter((c) => c.currentHere && !c.employee.isResigned && !c.employee.salaryConfigured).length;
+  const historyCount = cards.filter((c) => c.employee.isResigned || !c.currentHere).length;
+
   const visibleCards = cards.filter(({ employee, currentHere }) => {
-    if (!employee.name.includes(searchTerm.trim())) return false;
+    if (searchTerm.trim() && !employee.name.includes(searchTerm.trim()) && !employee.id.includes(searchTerm.trim())) {
+      return false;
+    }
     if (statusFilter === "active") return currentHere && !employee.isResigned;
     if (statusFilter === "pending") return currentHere && !employee.isResigned && !employee.salaryConfigured;
     if (statusFilter === "history") return employee.isResigned || !currentHere;
@@ -69,7 +74,7 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
       render: (_, record) => {
         const { employee, currentHere, plannedOut, plannedIn, currentAssignment } = record;
         if (employee.isResigned) {
-          return <Tag color="default">已离职 ({employee.resignationDate})</Tag>;
+          return <Tag color="error">已离职 ({employee.resignationDate})</Tag>;
         }
         if (!employee.salaryConfigured) {
           return <Tag color="warning">薪资待设置</Tag>;
@@ -77,7 +82,7 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
         if (currentHere) {
           return (
             <Space direction="vertical" size={2}>
-              <Tag color="success">当前在本店</Tag>
+              <Tag color="success">当前在本店在岗</Tag>
               {plannedOut && (
                 <Text type="danger" style={{ fontSize: 12 }}>
                   将于 {plannedOut.startMonth} 调往 {storeMap.get(plannedOut.storeId)?.name}
@@ -88,7 +93,7 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
         }
         return (
           <Space direction="vertical" size={2}>
-            <Tag color="cyan">历史员工</Tag>
+            <Tag color="default">历史员工</Tag>
             {plannedIn && (
               <Text type="success" style={{ fontSize: 12 }}>
                 将于 {plannedIn.startMonth} 调入本店
@@ -107,19 +112,17 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
       title: "基础工资",
       dataIndex: ["employee", "baseSalary"],
       key: "baseSalary",
-      render: (val) => formatCurrency(val),
-    },
-    {
-      title: "加班时薪",
-      dataIndex: ["employee", "overtimeRate"],
-      key: "overtimeRate",
-      render: (val) => `${val} / 小时`,
+      render: (val, record) => record.employee.salaryConfigured ? (
+        <span className="tabular-nums" style={{ fontWeight: 600 }}>{formatCurrency(val)}</span>
+      ) : (
+        <Text type="warning">待设置薪资</Text>
+      ),
     },
     {
       title: "全勤奖金",
       dataIndex: ["employee", "attendanceBonus"],
       key: "attendanceBonus",
-      render: (val) => formatCurrency(val),
+      render: (val, record) => record.employee.salaryConfigured ? formatCurrency(val) : "-",
     },
     {
       title: "操作",
@@ -142,8 +145,14 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
             {currentHere && (
               <Popconfirm
                 title={employee.isResigned ? "确定恢复该员工在职？" : "确定办理该员工离职？"}
+                description={
+                  employee.isResigned
+                    ? "恢复在职后，该员工将重新回到当前门店考勤与发薪名单中。"
+                    : "办理离职后，该员工仍保留在历史月份的工资单中，月结计算将按照离职日前在职时间结算。"
+                }
                 onConfirm={() => onToggleResignation(employee, !employee.isResigned)}
-                okText="确定"
+                okText={employee.isResigned ? "确认恢复" : "确认离职"}
+                okButtonProps={{ danger: !employee.isResigned }}
                 cancelText="取消"
               >
                 <Button
@@ -161,8 +170,6 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
     },
   ];
 
-  const storeAdjustments = workspace.adjustments.filter((record) => record.storeId === store.id);
-
   const drawerAssignments = historyDrawerEmployee ? getEmployeeAssignments(workspace, historyDrawerEmployee.id) : [];
   const drawerAdjustments = historyDrawerEmployee ? workspace.adjustments.filter((a) => a.employeeId === historyDrawerEmployee.id) : [];
 
@@ -171,7 +178,7 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
       <PageHeader
         eyebrow="员工管理"
         title={`${store.name} 员工档案`}
-        description="维护员工档案、在职状态和按月生效的跨店调动。"
+        description="维护门店员工基本信息、薪资组件、调店履历与在职状态。"
         actions={
           <Button type="primary" size="large" icon={<PlusOutlined />} onClick={onCreate}>
             新增员工
@@ -179,79 +186,54 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
         }
       />
 
-      <Row gutter={[24, 24]}>
-        <Col xs={24} xl={17}>
-          <Card
-            title={`本店员工列表 (${visibleCards.length}/${cards.length})`}
-            extra={
-              <Space wrap>
-                <Input
-                  placeholder="搜索姓名"
-                  prefix={<SearchOutlined />}
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  style={{ width: 160 }}
-                  allowClear
-                />
-                <Select
-                  value={statusFilter}
-                  onChange={setStatusFilter}
-                  style={{ width: 140 }}
-                  options={[
-                    { value: "all", label: "全部员工" },
-                    { value: "active", label: "当前在岗" },
-                    { value: "pending", label: "薪资待设置" },
-                    { value: "history", label: "历史员工" },
-                  ]}
-                />
-              </Space>
-            }
-            style={{ borderRadius: 8 }}
-          >
-            <Table
-              columns={columns}
-              dataSource={visibleCards}
-              rowKey={(item) => item.employee.id}
-              pagination={{ pageSize: 8, showSizeChanger: false }}
-              size="middle"
+      {/* 页顶分段统计与过滤器 - 替代简单下拉框 */}
+      <Card size="small" style={{ borderRadius: 8 }}>
+        <Row justify="space-between" align="middle" gutter={[16, 16]}>
+          <Col>
+            <Segmented
+              size="large"
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                { label: `全部员工 (${cards.length})`, value: "all" },
+                { label: `在岗员工 (${activeCount})`, value: "active" },
+                { label: `待设薪资 (${pendingSalaryCount})`, value: "pending" },
+                { label: `历史与离职 (${historyCount})`, value: "history" },
+              ]}
             />
-          </Card>
-        </Col>
+          </Col>
+          <Col>
+            <Input
+              placeholder="搜索员工姓名或工号"
+              prefix={<SearchOutlined />}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{ width: 220 }}
+              allowClear
+            />
+          </Col>
+        </Row>
+      </Card>
 
-        <Col xs={24} xl={7}>
-          <Card title="最近调薪记录" style={{ borderRadius: 8 }}>
-            {storeAdjustments.length === 0 ? (
-              <Text type="secondary">当前门店还没有调薪记录。</Text>
-            ) : (
-              <Timeline
-                items={storeAdjustments.slice(0, 8).map((record) => ({
-                  color: "blue",
-                  children: (
-                    <div>
-                      <Text strong>{record.employeeName}</Text> · <Tag>{record.itemLabel}</Tag>
-                      <br />
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        {record.date} · {record.previousValue} → {record.newValue}
-                      </Text>
-                      {record.notes && (
-                        <Paragraph type="secondary" style={{ fontSize: 12, margin: "2px 0 0 0" }}>
-                          {record.notes}
-                        </Paragraph>
-                      )}
-                    </div>
-                  ),
-                }))}
-              />
-            )}
-          </Card>
-        </Col>
-      </Row>
+      {/* 瘦身后的全宽员工主表 */}
+      <Card
+        title={`员工档案列表 (当前显示 ${visibleCards.length} 位)`}
+        style={{ borderRadius: 8 }}
+      >
+        <Table
+          columns={columns}
+          dataSource={visibleCards}
+          rowKey={(item) => item.employee.id}
+          pagination={{ pageSize: 10, showSizeChanger: true }}
+          size="middle"
+        />
+      </Card>
 
       {/* 员工档案个人履历 Drawer */}
       <Drawer
         title={historyDrawerEmployee ? `${historyDrawerEmployee.name} - 档案个人履历` : "员工履历"}
         placement="right"
-        width={480}
+        width={500}
         onClose={() => setHistoryDrawerEmployee(null)}
         open={Boolean(historyDrawerEmployee)}
       >
@@ -264,7 +246,7 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
               <Descriptions.Item label="加班时薪">{historyDrawerEmployee.overtimeRate} 元/小时</Descriptions.Item>
               <Descriptions.Item label="全勤奖金">{formatCurrency(historyDrawerEmployee.attendanceBonus)}</Descriptions.Item>
               <Descriptions.Item label="在职状态">
-                <Tag color={historyDrawerEmployee.isResigned ? "default" : "success"}>
+                <Tag color={historyDrawerEmployee.isResigned ? "error" : "success"}>
                   {historyDrawerEmployee.isResigned ? `已离职 (${historyDrawerEmployee.resignationDate})` : "在职"}
                 </Tag>
               </Descriptions.Item>
