@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Card, Form, InputNumber, Input, Button, Tag, Popconfirm, Upload, List, Space, Row, Col, Timeline, Typography, Alert } from "antd";
+import { Card, Form, InputNumber, Input, Button, Tag, Popconfirm, Upload, List, Space, Row, Col, Timeline, Typography, Alert, Modal, Descriptions } from "antd";
 import {
   ShopOutlined,
   EditOutlined,
@@ -13,6 +13,7 @@ import {
   CloudUploadOutlined,
   HistoryOutlined,
   SettingOutlined,
+  ExclamationCircleOutlined,
 } from "@ant-design/icons";
 import { PageHeader } from "../components/PageHeader.jsx";
 import { SectionHeading } from "../components/SectionHeading.jsx";
@@ -35,6 +36,7 @@ export function SettingsPage({
   const [passphraseModal, setPassphraseModal] = useState(null);
   const [importPassphrase, setImportPassphrase] = useState("");
   const [importPassphraseFile, setImportPassphraseFile] = useState(null);
+  const [restoreDiffModal, setRestoreDiffModal] = useState(null);
   const desktopApi = window.payrollDesktop;
 
   useEffect(() => {
@@ -43,13 +45,13 @@ export function SettingsPage({
   }, []);
 
   const configFields = [
-    ["socialInsuranceBase", "社保补助基数", "固定计入，不按请假扣减", 0],
-    ["mealAllowanceBase", "饭补基数", "每月满勤饭补", 0],
+    ["socialInsuranceBase", "社保补助基数", "固定计入，不按请假扣减（💡 联动影响本店全员社保补助）", 0],
+    ["mealAllowanceBase", "饭补基数", "每月满勤饭补（💡 联动影响本店全员满勤饭补）", 0],
     ["auditPassedBonus", "稽核达标奖励", "稽核达标时计入", 0],
     ["auditFallbackBonus", "稽核未达标保底", "稽核未达标时计入", 0],
     ["nightShiftRate", "夜班每小时补贴", "设为 0 表示本店不启用", 0],
-    ["leaveDaysDivisor", "请假天数除数", "基础工资除以此数后按天扣减", 0.5],
-    ["leaveHoursDivisor", "请假小时除数", "基础工资除以此数后按小时扣减", 0.5],
+    ["leaveDaysDivisor", "请假天数除数", "基础工资除以此数后按天扣减（💡 联动影响本门店所有请假天数扣算比例）", 0.5],
+    ["leaveHoursDivisor", "请假小时除数", "基础工资除以此数后按小时扣减（💡 联动影响本门店请假小时扣算比例）", 0.5],
   ];
 
   useEffect(() => {
@@ -115,7 +117,6 @@ export function SettingsPage({
       <PageHeader
         eyebrow="门店管理"
         title="门店、算薪规则与数据安全"
-
         description="集中维护门店列表、本金计算参数、访问密码与离线数据备份。"
         actions={
           <Button type="primary" size="large" icon={<ShopOutlined />} onClick={onCreateStore}>
@@ -282,7 +283,17 @@ export function SettingsPage({
                     setImportPassphraseFile(file);
                     setImportPassphrase("");
                   } else {
-                    onImportBackup(file);
+                    const backupData = parsed.data || {};
+                    const backupStoresCount = backupData.stores?.length ?? 0;
+                    const backupEmpCount = backupData.employees?.length ?? 0;
+                    setRestoreDiffModal({
+                      file,
+                      version: parsed.version || "未知",
+                      exportedAt: parsed.exportedAt || "未知",
+                      backupStoresCount,
+                      backupEmpCount,
+                      currentStoresCount: stores.length,
+                    });
                   }
                 } catch {
                   onImportBackup(file);
@@ -322,6 +333,42 @@ export function SettingsPage({
           </Card>
         </Col>
       </Row>
+
+      {/* 备份恢复前 Diff 对比 Modal */}
+      {restoreDiffModal && (
+        <Modal
+          title="恢复数据前 Diff 对比核对"
+          open={true}
+          onCancel={() => setRestoreDiffModal(null)}
+          onOk={() => {
+            onImportBackup(restoreDiffModal.file);
+            setRestoreDiffModal(null);
+          }}
+          okText="确认覆盖并恢复数据"
+          cancelText="取消"
+        >
+          <Alert
+            type="warning"
+            showIcon
+            icon={<ExclamationCircleOutlined />}
+            message="数据全量覆盖警告"
+            description="确认恢复后，当前本地工作区中的门店、员工和考勤数据将被该备份文件完全替换。"
+            style={{ marginBottom: 16 }}
+          />
+          <Descriptions title="备份与当前数据规格对比" bordered size="small" column={1}>
+            <Descriptions.Item label="备份文件版本">{restoreDiffModal.version}</Descriptions.Item>
+            <Descriptions.Item label="备份导出时间">
+              {restoreDiffModal.exportedAt !== "未知" ? new Date(restoreDiffModal.exportedAt).toLocaleString("zh-CN") : "未知"}
+            </Descriptions.Item>
+            <Descriptions.Item label="门店数量对比">
+              当前 <Text strong>{restoreDiffModal.currentStoresCount}</Text> 家  ➡️  备份 <Text strong style={{ color: "#1677ff" }}>{restoreDiffModal.backupStoresCount}</Text> 家
+            </Descriptions.Item>
+            <Descriptions.Item label="包含员工数据">
+              备份文件中共包含 <Text strong style={{ color: "#1677ff" }}>{restoreDiffModal.backupEmpCount}</Text> 位员工档案与薪资数据
+            </Descriptions.Item>
+          </Descriptions>
+        </Modal>
+      )}
     </Space>
   );
 }

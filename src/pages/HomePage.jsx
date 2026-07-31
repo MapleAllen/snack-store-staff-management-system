@@ -6,6 +6,8 @@ import {
   WarningOutlined,
   ArrowRightOutlined,
   ShopOutlined,
+  ArrowUpOutlined,
+  ArrowDownOutlined,
 } from "@ant-design/icons";
 import { StatCard } from "../components/StatCard.jsx";
 import { SectionHeading } from "../components/SectionHeading.jsx";
@@ -17,8 +19,18 @@ import {
 
 const { Title, Text, Paragraph } = Typography;
 
+function getPreviousMonthStr(monthStr) {
+  if (!monthStr || !monthStr.includes("-")) return monthStr;
+  const [year, month] = monthStr.split("-").map(Number);
+  const prevDate = new Date(year, month - 2, 1);
+  return `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`;
+}
+
 export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) {
   const readiness = getPayrollMonthCloseReadiness(workspace, activeMonth);
+  const previousMonthStr = getPreviousMonthStr(activeMonth);
+  const prevReadiness = getPayrollMonthCloseReadiness(workspace, previousMonthStr);
+
   const storeSummaries = readiness.stores;
   const totalForecast = readiness.totals.estimated;
   const totalConfirmed = readiness.totals.confirmed;
@@ -31,6 +43,10 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) 
   const totalBlockers = readiness.blockerRowCount;
   const readyStores = storeSummaries.filter((item) => item.status === "ready");
   const closedStores = readiness.closedCount;
+
+  const prevForecast = prevReadiness.totals.estimated;
+  const momDiff = totalForecast - prevForecast;
+  const momPercent = prevForecast ? ((momDiff / prevForecast) * 100).toFixed(1) : 0;
 
   const nextUnconfigured = storeSummaries.find((item) => item.unconfiguredCount > 0);
   const nextInvalid = storeSummaries.find((item) => item.invalidCount > 0);
@@ -58,12 +74,6 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) 
       reason: getPayrollIssueMessage(blocker.issues[0]),
     })));
   const priorityEmployees = priorityRows.slice(0, 3);
-  const blockerReasonSummary = Object.entries(priorityRows.reduce((summary, item) => {
-    summary[item.reason] = (summary[item.reason] ?? 0) + 1;
-    return summary;
-  }, {}))
-    .sort((left, right) => right[1] - left[1])
-    .slice(0, 3);
 
   function goToPayroll(storeId) {
     if (storeId) onSelectStore(storeId);
@@ -133,6 +143,14 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) 
                   />
                 </Col>
               </Row>
+
+              {/* 环比变动趋势卡片 */}
+              <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.15)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 12 }}>较上月 ({previousMonthStr}) 预估变动：</Text>
+                <Tag color={momDiff > 0 ? "volcano" : momDiff < 0 ? "green" : "blue"} style={{ margin: 0 }}>
+                  {momDiff >= 0 ? `+${formatCurrency(momDiff)} (+${momPercent}%)` : `-${formatCurrency(Math.abs(momDiff))} (${momPercent}%)`}
+                </Tag>
+              </div>
             </Card>
           </Col>
         </Row>
@@ -177,7 +195,7 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) 
 
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
-          <StatCard label="预计实发" value={formatCurrency(totalForecast)} hint={`${totalEmployees} 位在岗员工`} accent="primary" />
+          <StatCard label="预计实发" value={formatCurrency(totalForecast)} hint={`较上月 ${momDiff >= 0 ? "+" : "-"}${formatCurrency(Math.abs(momDiff))}`} accent="primary" />
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <StatCard label="已确认实发" value={formatCurrency(totalConfirmed)} hint={`${totalPending} 人待确认`} />
