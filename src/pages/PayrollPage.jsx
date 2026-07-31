@@ -11,57 +11,31 @@ import {
   InputNumber,
   Select,
   Alert,
-  Badge,
   Tooltip,
   Modal,
-  Tabs,
   Descriptions,
   Typography,
-  Switch,
   Divider,
-  Popconfirm,
-  Popover,
 } from "antd";
 import {
   CheckCircleOutlined,
-  WarningOutlined,
   LockOutlined,
   UnlockOutlined,
   ExportOutlined,
   UserOutlined,
   PlusOutlined,
   EditOutlined,
-  CalendarOutlined,
-  PayCircleOutlined,
-  InfoCircleOutlined,
   CalculatorOutlined,
 } from "@ant-design/icons";
 
 import { StatCard } from "../components/StatCard.jsx";
-import { SectionHeading } from "../components/SectionHeading.jsx";
+import { PageHeader } from "../components/PageHeader.jsx";
 import {
-  entryHasDraftChanges,
   formatCurrency,
-  formatTimestamp,
-  createEmployeeDraft,
-  entryHasInput,
-  getPayrollCloseBlockers,
-  getPayrollChangeItems,
   getPayrollIssueMessage,
-  getPayrollIssueItems,
-  getPayrollReviewStatus,
 } from "../payrollLogic.js";
-import { VIEW_OPTIONS } from "../payrollData.js";
 
-const { Text, Title, Paragraph } = Typography;
-
-const ENTRY_FIELD_LABELS = {
-  overtimeHours: "加班时长",
-  leaveDays: "请假天数",
-  leaveHours: "请假小时",
-  nightShiftHours: "夜班时长",
-  specialAdjustment: "特殊加减项",
-};
+const { Text } = Typography;
 
 const PAYROLL_ADJUSTMENT_CATEGORIES = [
   { value: "bonus", label: "奖金" },
@@ -77,10 +51,6 @@ const DEFAULT_PAYROLL_ADJUSTMENT_DRAFT = {
   status: "pending",
 };
 
-function issueMessage(issue) {
-  return getPayrollIssueMessage(issue);
-}
-
 function makePayrollAdjustmentId() {
   const value = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   return `payroll-adjustment-${value}`;
@@ -88,28 +58,6 @@ function makePayrollAdjustmentId() {
 
 function getPayrollAdjustments(entry) {
   return Array.isArray(entry?.payrollAdjustments) ? entry.payrollAdjustments : [];
-}
-
-function getOptionLabel(options, value) {
-  return options.find((option) => option.value === value)?.label ?? value;
-}
-
-function renderFormulaTooltip(row) {
-  if (!row.employee.salaryConfigured) return "尚未设置初始薪资组件";
-  const b = row.breakdown;
-  return (
-    <div style={{ fontSize: 12, lineHeight: 1.7, padding: 4 }}>
-      <div style={{ fontWeight: "bold", marginBottom: 4 }}>🧮 算薪公式拆解明细</div>
-      <div>· 基础工资: {formatCurrency(row.employee.baseSalary)}</div>
-      <div>· 加班工资: {row.employee.overtimeRate}元/时 × {row.entry.overtimeHours}时 = +{formatCurrency(b.overtimePay)}</div>
-      <div>· 请假扣款: -{formatCurrency(b.leaveDaysDeduction + b.leaveHoursDeduction)}</div>
-      <div>· 全勤/稽核: +{formatCurrency(b.attendancePay + b.auditPay)}</div>
-      <div>· 社保/饭补: +{formatCurrency(b.socialInsurance + b.mealAllowance)}</div>
-      {b.specialAdjustment !== 0 && <div>· 特殊调整: {b.specialAdjustment > 0 ? "+" : ""}{formatCurrency(b.specialAdjustment)}</div>}
-      <Divider style={{ margin: "6px 0", borderColor: "#e8e8e8" }} />
-      <div><Text type="primary" strong>实发小计: {formatCurrency(b.netSalary)}</Text></div>
-    </div>
-  );
 }
 
 export function PayrollPage({
@@ -136,18 +84,22 @@ export function PayrollPage({
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [viewFilter, setViewFilter] = useState("all");
+  const [formulaModalRow, setFormulaModalRow] = useState(null);
 
   const [adjustmentFormVisible, setAdjustmentFormVisible] = useState(false);
   const [adjustmentDraft, setAdjustmentDraft] = useState(DEFAULT_PAYROLL_ADJUSTMENT_DRAFT);
   const [editingAdjustmentId, setEditingAdjustmentId] = useState(null);
 
   const isClosed = monthlyStore?.status === "closed";
-
   const blockerRows = payrollRows.filter((row) => row.closeBlockers.length > 0);
   const reviewRows = payrollRows.filter((row) => row.employee.salaryConfigured && row.issueItems.length > 0);
+  const pendingCount = payrollRows.filter((row) => !row.entry.isComplete).length;
+  const canClose = blockerRows.length === 0;
 
   const visiblePayrollRows = payrollRows.filter((row) => {
-    if (searchTerm && !row.employee.name.includes(searchTerm.trim())) return false;
+    if (searchTerm && !row.employee.name.includes(searchTerm.trim()) && !row.employee.id.includes(searchTerm.trim())) {
+      return false;
+    }
     if (viewFilter === "pending") return !row.entry.isComplete;
     if (viewFilter === "issues") return row.closeBlockers.length > 0 || row.issueItems.length > 0;
     if (viewFilter === "resigned") return row.employee.isResigned;
@@ -206,26 +158,18 @@ export function PayrollPage({
     patchMonthlyEntry(selectedRow.employee.id, { payrollAdjustments: nextList });
   }
 
-  function handleConfirmAll() {
-    payrollRows.forEach((row) => {
-      if (!row.entry.isComplete && row.employee.salaryConfigured && row.closeBlockers.length === 0) {
-        toggleEntryComplete(row.employee.id, true);
-      }
-    });
-  }
-
   const columns = [
     {
-      title: "员工姓名",
+      title: "员工姓名与状态",
       dataIndex: ["employee", "name"],
       key: "name",
-      width: 130,
+      width: 160,
       render: (text, record) => {
         const status = record.reviewStatus;
         return (
           <Space direction="vertical" size={2}>
-            <Text strong>{text}</Text>
-            <Tag color={status.tone === "success" ? "success" : status.tone === "warning" ? "warning" : "default"}>
+            <Text strong style={{ fontSize: 14 }}>{text}</Text>
+            <Tag color={status.tone === "success" ? "success" : status.tone === "warning" ? "warning" : "error"}>
               {status.label}
             </Tag>
           </Space>
@@ -233,247 +177,203 @@ export function PayrollPage({
       },
     },
     {
-      title: "加班时长",
-      key: "overtimeHours",
-      width: 110,
-      render: (_, record) => (
-        <InputNumber
-          disabled={isLocked}
-          min={0}
-          step={0.5}
-          size="small"
-          value={record.entry.overtimeHours}
-          onChange={(val) => patchMonthlyEntry(record.employee.id, { overtimeHours: val ?? 0 })}
-          onClick={(e) => e.stopPropagation()}
-        />
-      ),
-    },
-    {
-      title: "请假天数",
-      key: "leaveDays",
-      width: 100,
-      render: (_, record) => (
-        <InputNumber
-          disabled={isLocked}
-          min={0}
-          step={0.5}
-          size="small"
-          value={record.entry.leaveDays}
-          onChange={(val) => patchMonthlyEntry(record.employee.id, { leaveDays: val ?? 0 })}
-          onClick={(e) => e.stopPropagation()}
-        />
-      ),
-    },
-    {
-      title: "请假小时",
-      key: "leaveHours",
-      width: 100,
-      render: (_, record) => (
-        <InputNumber
-          disabled={isLocked}
-          min={0}
-          step={0.5}
-          size="small"
-          value={record.entry.leaveHours}
-          onChange={(val) => patchMonthlyEntry(record.employee.id, { leaveHours: val ?? 0 })}
-          onClick={(e) => e.stopPropagation()}
-        />
-      ),
-    },
-    ...(activeStore.config.nightShiftRate > 0
-      ? [
-          {
-            title: "夜班时长",
-            key: "nightShiftHours",
-            width: 100,
-            render: (_, record) => (
-              <InputNumber
-                disabled={isLocked}
-                min={0}
-                step={0.5}
-                size="small"
-                value={record.entry.nightShiftHours}
-                onChange={(val) => patchMonthlyEntry(record.employee.id, { nightShiftHours: val ?? 0 })}
-                onClick={(e) => e.stopPropagation()}
-              />
-            ),
-          },
-        ]
-      : []),
-    {
-      title: "稽核",
-      key: "auditPassed",
-      width: 90,
-      render: (_, record) => (
-        <Switch
-          disabled={isLocked}
-          size="small"
-          checked={record.entry.auditPassed}
-          checkedChildren="达"
-          unCheckedChildren="否"
-          onChange={(checked) => patchMonthlyEntry(record.employee.id, { auditPassed: checked })}
-          onClick={(_, e) => e.stopPropagation()}
-        />
-      ),
-    },
-    {
-      title: "特殊调整",
-      key: "specialAdjustment",
-      width: 110,
-      render: (_, record) => (
-        <InputNumber
-          disabled={isLocked}
-          step={10}
-          size="small"
-          value={record.entry.specialAdjustment}
-          onChange={(val) => patchMonthlyEntry(record.employee.id, { specialAdjustment: val ?? 0 })}
-          onClick={(e) => e.stopPropagation()}
-        />
-      ),
-    },
-    {
-      title: "确认完成",
-      key: "isComplete",
-      width: 130,
+      title: "考勤与调薪概要",
+      key: "summary",
       render: (_, record) => {
-        const disabled = isLocked || (!record.entry.isComplete && record.validationIssues.length > 0) || !record.employee.salaryConfigured;
+        const b = record.breakdown;
+        return (
+          <Space wrap size="small" style={{ fontSize: 12 }}>
+            {b.overtimeHours > 0 && <Tag color="blue">加班 {b.overtimeHours}h</Tag>}
+            {b.leaveDays > 0 && <Tag color="orange">请假 {b.leaveDays}天</Tag>}
+            {b.leaveHours > 0 && <Tag color="orange">请假 {b.leaveHours}h</Tag>}
+            {b.specialAdjustment !== 0 && (
+              <Tag color={b.specialAdjustment > 0 ? "green" : "red"}>
+                调整 {b.specialAdjustment > 0 ? "+" : ""}{formatCurrency(b.specialAdjustment)}
+              </Tag>
+            )}
+            {!b.overtimeHours && !b.leaveDays && !b.leaveHours && !b.specialAdjustment && (
+              <Text type="secondary">考勤正常</Text>
+            )}
+          </Space>
+        );
+      },
+    },
+    {
+      title: "实发金额 (点击查算数)",
+      key: "netSalary",
+      width: 170,
+      render: (_, record) => {
+        if (!record.employee.salaryConfigured) {
+          return (
+            <Button size="small" type="link" danger onClick={(e) => { e.stopPropagation(); openAdjustmentModal(record.employee); }}>
+              待设置薪资
+            </Button>
+          );
+        }
         return (
           <Button
-            size="small"
-            type={record.entry.isComplete ? "primary" : "default"}
-            disabled={disabled}
+            type="text"
+            icon={<CalculatorOutlined />}
             onClick={(e) => {
               e.stopPropagation();
-              toggleEntryComplete(record.employee.id, !record.entry.isComplete);
+              setFormulaModalRow(record);
             }}
+            style={{ padding: "4px 8px" }}
           >
-            {record.entry.isComplete ? "已确认" : "点此确认"}
+            <span className="tabular-nums" style={{ fontSize: 16, fontWeight: 700, color: "#1677ff" }}>
+              {formatCurrency(record.breakdown.netSalary)}
+            </span>
           </Button>
         );
       },
     },
     {
-      title: "实发工资",
-      key: "netSalary",
-      width: 130,
-      render: (_, record) => (
-        <Popover content={renderFormulaTooltip(record)} title={record.employee.name} trigger="hover">
-          <Text strong style={{ color: record.employee.salaryConfigured ? "#1677ff" : "#fa8c16", cursor: "pointer" }}>
-            {record.employee.salaryConfigured ? formatCurrency(record.breakdown.netSalary) : "待设置"}
-            <CalculatorOutlined style={{ fontSize: 11, marginLeft: 4, color: "#8c8c8c" }} />
-          </Text>
-        </Popover>
-      ),
+      title: "完成确认",
+      key: "isComplete",
+      width: 150,
+      align: "right",
+      render: (_, record) => {
+        const disabled = isClosed || (!record.entry.isComplete && record.closeBlockers.length > 0);
+        const blockerMsg = record.closeBlockers.length ? getPayrollIssueMessage(record.closeBlockers[0]) : "";
+
+        const btn = record.entry.isComplete ? (
+          <Button
+            type="primary"
+            size="small"
+            style={{ backgroundColor: "#52c41a", borderColor: "#52c41a" }}
+            disabled={isClosed}
+            icon={<CheckCircleOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleEntryComplete(record.employee.id, false);
+            }}
+          >
+            已确认
+          </Button>
+        ) : (
+          <Button
+            type="default"
+            size="small"
+            danger={record.closeBlockers.length > 0}
+            disabled={disabled}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleEntryComplete(record.employee.id, true);
+            }}
+          >
+            {record.closeBlockers.length ? "有阻塞项" : "点此确认"}
+          </Button>
+        );
+
+        return record.closeBlockers.length && !record.entry.isComplete ? (
+          <Tooltip title={blockerMsg}>{btn}</Tooltip>
+        ) : (
+          btn
+        );
+      },
     },
   ];
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
-      {/* 头部页面属性与导出行 */}
-      <Card size="small" style={{ borderRadius: 8 }}>
-        <Row justify="space-between" align="middle" gutter={[16, 16]}>
-          <Col>
-            <Space align="center" size="middle">
-              <Tag color="geekblue" style={{ fontSize: 14, padding: "4px 8px" }}>{activeStore.name}</Tag>
-              <Input
-                type="month"
-                value={activeMonth}
-                onChange={(e) => setActiveMonth(e.target.value)}
-                style={{ width: 140 }}
-              />
-              {isClosed ? (
-                <Tag color="success" icon={<LockOutlined />}>已月结封账</Tag>
-              ) : (
-                <Tag color="processing" icon={<UnlockOutlined />}>算薪核对中</Tag>
-              )}
-            </Space>
-          </Col>
-
-          <Col>
-            <Space wrap>
-              <Button icon={<ExportOutlined />} onClick={exportCurrentMonth}>
-                {isClosed ? "导出月结工资表" : "导出草稿"}
+      {/* 核心操作 Header - 突出月结封账大按钮 */}
+      <PageHeader
+        eyebrow="工资管理"
+        title={`${activeStore?.name ?? "门店"} 工资核对中心`}
+        description={`${activeMonth} 区分草稿与已封账状态，每位员工需完成明确确认后再执行全店月结。`}
+        actions={
+          <Space wrap align="center">
+            <Input
+              type="month"
+              value={activeMonth}
+              onChange={(e) => setActiveMonth(e.target.value)}
+              style={{ width: 140 }}
+            />
+            <Button icon={<ExportOutlined />} onClick={exportCurrentMonth}>
+              导出 CSV
+            </Button>
+            {isClosed ? (
+              <Button
+                type="primary"
+                danger
+                size="large"
+                icon={<UnlockOutlined />}
+                onClick={onUnlockPayroll}
+              >
+                解锁本月工资
               </Button>
-              {isClosed ? (
-                <Button danger icon={<UnlockOutlined />} onClick={onUnlockPayroll}>
-                  解锁本月工资
-                </Button>
-              ) : (
-                <Button type="primary" icon={<LockOutlined />} onClick={onClosePayroll}>
-                  确认本月月结
-                </Button>
-              )}
-            </Space>
-          </Col>
-        </Row>
-      </Card>
+            ) : (
+              <Button
+                type="primary"
+                size="large"
+                style={{ backgroundColor: "#52c41a", borderColor: "#52c41a", height: 40, fontWeight: 600 }}
+                icon={<LockOutlined />}
+                onClick={onClosePayroll}
+              >
+                确认本月月结封账
+              </Button>
+            )}
+          </Space>
+        }
+      />
 
-      {/* 统计指标卡片 */}
+      {/* 已月结封账冻结横幅 */}
+      {isClosed && (
+        <Alert
+          type="info"
+          showIcon
+          icon={<LockOutlined />}
+          message={`本月工资已于 ${monthlyStore.closedAt ? new Date(monthlyStore.closedAt).toLocaleString("zh-CN") : "以前"} 结账封账`}
+          description="当前工资表已冻结为不可修改状态。如需更正考勤或工资，请点击右上角“解锁本月工资”并填写解锁原因。"
+        />
+      )}
+
+      {/* 3 张精简指标卡 (代原 5 卡挤压) */}
       <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} lg={4.8}>
-          <StatCard label="本月实发小计" value={formatCurrency(totalNetSalary)} hint={`预计总额 ${formatCurrency(forecastNetSalary)}`} accent="primary" />
+        <Col xs={24} sm={8}>
+          <StatCard
+            label="本月预计实发总额"
+            value={formatCurrency(forecastNetSalary)}
+            hint={`已确认实发 ${formatCurrency(totalNetSalary)}`}
+            accent="primary"
+          />
         </Col>
-        <Col xs={24} sm={12} lg={4.8}>
-          <StatCard label="月结阻塞" value={`${blockerRows.length} 人`} hint="待确认或薪资未设置" accent={blockerRows.length ? "warning" : "success"} />
+        <Col xs={24} sm={8}>
+          <StatCard
+            label="待确认完成员工"
+            value={`${pendingCount} 人`}
+            hint={`全店共 ${payrollRows.length} 位员工，确认进度 ${completionRate}%`}
+            accent={pendingCount > 0 ? "warning" : "success"}
+          />
         </Col>
-        <Col xs={24} sm={12} lg={4.8}>
-          <StatCard label="确认完成度" value={`${completionRate}%`} hint={`已确认 ${touchedRows.length}/${payrollRows.length} 人`} accent={completionRate === 100 ? "success" : "default"} />
-        </Col>
-        <Col xs={24} sm={12} lg={4.8}>
-          <StatCard label="待复核变动" value={`${exceptionCount} 人`} hint="含请假、调薪或未达标" accent={exceptionCount ? "warning" : "success"} />
-        </Col>
-        <Col xs={24} sm={12} lg={4.8}>
-          <StatCard label="月结状态" value={isClosed ? "已月结" : "未月结"} hint={monthlyStore?.closedAt ? `结账于 ${new Date(monthlyStore.closedAt).toLocaleDateString()}` : "可随时进行核算"} accent={isClosed ? "success" : "default"} />
+        <Col xs={24} sm={8}>
+          <StatCard
+            label="月结阻塞项"
+            value={`${blockerRows.length} 项`}
+            hint={`包含复核提醒 ${reviewRows.length} 人`}
+            accent={blockerRows.length > 0 ? "warning" : "success"}
+          />
         </Col>
       </Row>
 
-      {/* 老板阻碍项提示 Header Alert */}
-      {blockerRows.length > 0 ? (
-        <Alert
-          type="warning"
-          showIcon
-          icon={<WarningOutlined />}
-          message={`当前有 ${blockerRows.length} 位员工阻塞月结`}
-          description={
-            <Space wrap style={{ marginTop: 4 }}>
-              {blockerRows.map((r) => (
-                <Tag color="error" key={r.employee.id}>
-                  {r.employee.name}: {r.closeBlockers.map(issueMessage).join("、")}
-                </Tag>
-              ))}
-            </Space>
-          }
-        />
-      ) : isClosed ? (
-        <Alert type="success" showIcon icon={<LockOutlined />} message="本月工资已冻结，如需变更请点击上方“解锁本月工资”。" />
-      ) : (
-        <Alert type="info" showIcon icon={<CheckCircleOutlined />} message="无阻塞项，全部员工确认完成后即可点击“确认本月月结”。" />
-      )}
-
-      {/* 左右分栏工作台 Workspace */}
-      <Row gutter={[16, 16]}>
-        {/* 左侧主算薪列表 */}
-        <Col xs={24} xl={16}>
+      {/* 主界面：左侧表格 + 右侧固定明细面板 */}
+      <Row gutter={[24, 24]}>
+        <Col xs={24} xl={15}>
           <Card
-            title="算薪主工作台"
+            title={`员工工资表 (${visiblePayrollRows.length}/${payrollRows.length})`}
             extra={
               <Space wrap>
-                {!isLocked && blockerRows.length === 0 && (
-                  <Button size="small" type="primary" ghost icon={<CheckCircleOutlined />} onClick={handleConfirmAll}>
-                    一键全员确认完成
-                  </Button>
-                )}
                 <Input
-                  placeholder="搜索员工"
+                  placeholder="搜索姓名或工号"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  style={{ width: 130 }}
+                  style={{ width: 150 }}
                   allowClear
                 />
                 <Select
                   value={viewFilter}
                   onChange={setViewFilter}
-                  style={{ width: 110 }}
+                  style={{ width: 120 }}
                   options={[
                     { value: "all", label: "全部员工" },
                     { value: "pending", label: "待确认" },
@@ -489,135 +389,206 @@ export function PayrollPage({
               columns={columns}
               dataSource={visiblePayrollRows}
               rowKey={(row) => row.employee.id}
-              pagination={false}
-              size="small"
+              pagination={{ pageSize: 10 }}
+              size="middle"
+              rowClassName={(row) =>
+                row.employee.id === selectedRow?.employee.id
+                  ? "row-status-selected"
+                  : row.entry.isComplete
+                  ? "row-status-confirmed"
+                  : "row-status-pending"
+              }
               onRow={(record) => ({
                 onClick: () => setSelectedEmployeeId(record.employee.id),
-                style: {
-                  cursor: "pointer",
-                  background: record.employee.id === selectedRow?.employee.id ? "#e6f4ff" : undefined,
-                },
               })}
             />
           </Card>
         </Col>
 
-        {/* 右侧选中员工算薪明细 & 调薪记录 */}
-        <Col xs={24} xl={8}>
-          {selectedRow ? (
-            <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+        {/* 右侧明细面板 - Sticky 固定滚动跟随 */}
+        <Col xs={24} xl={9}>
+          <div className="sticky-panel">
+            {selectedRow ? (
               <Card
                 title={
                   <Space>
                     <UserOutlined />
                     <Text strong>{selectedRow.employee.name}</Text>
-                    <Tag color={selectedRow.employee.salaryConfigured ? "blue" : "warning"}>
-                      {selectedRow.employee.salaryConfigured ? "已设薪资" : "薪资待设置"}
+                    <Tag color={selectedRow.employee.isResigned ? "error" : "success"}>
+                      {selectedRow.employee.isResigned ? "离职" : "在职"}
                     </Tag>
                   </Space>
                 }
                 extra={
-                  <Button size="small" icon={<EditOutlined />} onClick={() => openAdjustmentModal(selectedRow.employee)}>
-                    调薪/初始薪资
+                  <Button
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={() => openAdjustmentModal(selectedRow.employee)}
+                  >
+                    调整薪资
                   </Button>
                 }
                 style={{ borderRadius: 8 }}
               >
-                <Descriptions column={1} size="small" bordered>
-                  <Descriptions.Item label="基础工资">{formatCurrency(selectedRow.employee.baseSalary)}</Descriptions.Item>
-                  <Descriptions.Item label="加班时薪">{selectedRow.employee.overtimeRate} 元/时</Descriptions.Item>
-                  <Descriptions.Item label="全勤奖金">{formatCurrency(selectedRow.employee.attendanceBonus)}</Descriptions.Item>
-                  <Descriptions.Item label="考勤扣减">
-                    {formatCurrency(selectedRow.breakdown.leaveDaysDeduction + selectedRow.breakdown.leaveHoursDeduction)}
+                <Descriptions column={1} bordered size="small" style={{ marginBottom: 16 }}>
+                  <Descriptions.Item label="基础工资">
+                    <span className="tabular-nums" style={{ fontWeight: 600 }}>{formatCurrency(selectedRow.employee.baseSalary)}</span>
                   </Descriptions.Item>
-                  <Descriptions.Item label="加班补贴">{formatCurrency(selectedRow.breakdown.overtimePay)}</Descriptions.Item>
-                  <Descriptions.Item label="社保+饭补">
-                    {formatCurrency(selectedRow.breakdown.socialInsurance + selectedRow.breakdown.mealAllowance)}
+                  <Descriptions.Item label="加班补贴">+{formatCurrency(selectedRow.breakdown.overtimePay)}</Descriptions.Item>
+                  <Descriptions.Item label="请假扣减">-{formatCurrency(selectedRow.breakdown.leaveDaysDeduction + selectedRow.breakdown.leaveHoursDeduction)}</Descriptions.Item>
+                  <Descriptions.Item label="全勤/稽核">+{formatCurrency(selectedRow.breakdown.attendancePay + selectedRow.breakdown.auditPay)}</Descriptions.Item>
+                  <Descriptions.Item label="社保/饭补">+{formatCurrency(selectedRow.breakdown.socialInsurance + selectedRow.breakdown.mealAllowance)}</Descriptions.Item>
+                  <Descriptions.Item label="特殊加减项">
+                    {selectedRow.breakdown.specialAdjustment >= 0 ? "+" : ""}{formatCurrency(selectedRow.breakdown.specialAdjustment)}
                   </Descriptions.Item>
-                  <Descriptions.Item label="实发工资">
-                    <Popover content={renderFormulaTooltip(selectedRow)} title={selectedRow.employee.name} trigger="hover">
-                      <Text strong style={{ fontSize: 16, color: "#1677ff", cursor: "pointer" }}>
-                        {selectedRow.employee.salaryConfigured ? formatCurrency(selectedRow.breakdown.netSalary) : "待设置"} 🧮
-                      </Text>
-                    </Popover>
+                  <Descriptions.Item label="本月实发工资小计">
+                    <span className="tabular-nums" style={{ fontSize: 18, fontWeight: 700, color: "#1677ff" }}>
+                      {formatCurrency(selectedRow.breakdown.netSalary)}
+                    </span>
                   </Descriptions.Item>
                 </Descriptions>
 
-                {/* 结构化一次性调薪记录列表 */}
-                <Divider style={{ margin: "16px 0 12px 0" }} />
-                <Space justify="space-between" style={{ width: "100%", marginBottom: 8 }}>
-                  <Text strong style={{ fontSize: 13 }}>本月一次性奖惩/调整</Text>
-                  {!isLocked && (
-                    <Button size="small" type="primary" ghost icon={<PlusOutlined />} onClick={() => setAdjustmentFormVisible(true)}>
-                      添加调整
-                    </Button>
-                  )}
-                </Space>
+                <Divider style={{ margin: "12px 0" }}>特殊调整明细 (奖金/扣款/报销)</Divider>
 
+                {!isLocked && (
+                  <Button
+                    type="dashed"
+                    block
+                    icon={<PlusOutlined />}
+                    style={{ marginBottom: 12 }}
+                    onClick={() => {
+                      resetAdjustmentForm();
+                      setAdjustmentFormVisible(true);
+                    }}
+                  >
+                    新增特殊调整项
+                  </Button>
+                )}
+
+                {/* 调整项编辑弹框 */}
                 {adjustmentFormVisible && (
                   <Card size="small" style={{ background: "#fafafa", marginBottom: 12 }}>
-                    <Space direction="vertical" style={{ width: "100%" }}>
-                      <Select
-                        value={adjustmentDraft.category}
-                        onChange={(v) => setAdjustmentDraft((c) => ({ ...c, category: v }))}
-                        options={PAYROLL_ADJUSTMENT_CATEGORIES}
-                        style={{ width: "100%" }}
-                      />
-                      <InputNumber
-                        placeholder="金额"
-                        value={adjustmentDraft.amount}
-                        onChange={(v) => setAdjustmentDraft((c) => ({ ...c, amount: v }))}
-                        style={{ width: "100%" }}
-                      />
-                      <Input
-                        placeholder="备注原因"
-                        value={adjustmentDraft.reason}
-                        onChange={(e) => setAdjustmentDraft((c) => ({ ...c, reason: e.target.value }))}
-                      />
-                      <Space justify="end" style={{ width: "100%" }}>
-                        <Button size="small" onClick={resetAdjustmentForm}>取消</Button>
-                        <Button size="small" type="primary" onClick={handleSaveAdjustment}>保存</Button>
+                    <form onSubmit={handleSaveAdjustment}>
+                      <Space direction="vertical" style={{ width: "100%" }}>
+                        <Space wrap>
+                          <select
+                            value={adjustmentDraft.category}
+                            onChange={(e) => setAdjustmentDraft({ ...adjustmentDraft, category: e.target.value })}
+                            style={{ height: 32, borderRadius: 4, padding: "0 8px" }}
+                          >
+                            {PAYROLL_ADJUSTMENT_CATEGORIES.map((c) => (
+                              <option key={c.value} value={c.value}>{c.label}</option>
+                            ))}
+                          </select>
+                          <InputNumber
+                            placeholder="金额 (元)"
+                            min={0.01}
+                            step={1}
+                            value={adjustmentDraft.amount}
+                            onChange={(val) => setAdjustmentDraft({ ...adjustmentDraft, amount: val })}
+                            style={{ width: 120 }}
+                          />
+                        </Space>
+                        <Input
+                          placeholder="调整原因说明 (如：节日奖金、损耗扣款)"
+                          value={adjustmentDraft.reason}
+                          onChange={(e) => setAdjustmentDraft({ ...adjustmentDraft, reason: e.target.value })}
+                        />
+                        <Space justify="end" style={{ width: "100%" }}>
+                          <Button size="small" onClick={resetAdjustmentForm}>取消</Button>
+                          <Button size="small" type="primary" htmlType="submit">保存调整</Button>
+                        </Space>
                       </Space>
-                    </Space>
+                    </form>
                   </Card>
                 )}
 
+                {/* 调整项列表 */}
                 {selectedAdjustments.length === 0 ? (
-                  <Text type="secondary" style={{ fontSize: 12 }}>本月暂无一次性调整。</Text>
+                  <Text type="secondary" style={{ fontSize: 12, display: "block", textAlign: "center" }}>
+                    本月无特殊调整记录
+                  </Text>
                 ) : (
-                  <Space direction="vertical" style={{ width: "100%" }}>
-                    {selectedAdjustments.map((item) => (
-                      <div key={item.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "4px 0" }}>
-                        <div>
-                          <Tag size="small" color={item.category === "bonus" ? "green" : "volcano"}>
-                            {getOptionLabel(PAYROLL_ADJUSTMENT_CATEGORIES, item.category)}
-                          </Tag>
-                          <Text>{item.reason || "无说明"}</Text>
-                        </div>
-                        <Space>
-                          <Text strong style={{ color: item.category === "deduction" ? "#ff4d4f" : "#52c41a" }}>
-                            {item.category === "deduction" ? `-￥${item.amount}` : `+￥${item.amount}`}
-                          </Text>
-                          {!isLocked && (
-                            <Popconfirm title="确定删除该调整？" onConfirm={() => handleDeleteAdjustment(item.id)}>
-                              <Button type="text" danger size="small" style={{ padding: 0 }}>×</Button>
-                            </Popconfirm>
-                          )}
-                        </Space>
+                  selectedAdjustments.map((item) => (
+                    <div
+                      key={item.id}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "6px 8px",
+                        background: "#f8fafc",
+                        borderRadius: 4,
+                        marginBottom: 6,
+                      }}
+                    >
+                      <div>
+                        <Tag color="blue">{PAYROLL_ADJUSTMENT_CATEGORIES.find((c) => c.value === item.category)?.label}</Tag>
+                        <Text strong style={{ marginRight: 8 }}>{formatCurrency(item.amount)}</Text>
+                        <Text type="secondary" style={{ fontSize: 12 }}>{item.reason}</Text>
                       </div>
-                    ))}
-                  </Space>
+                      {!isLocked && (
+                        <Button
+                          size="small"
+                          type="text"
+                          danger
+                          onClick={() => handleDeleteAdjustment(item.id)}
+                        >
+                          删除
+                        </Button>
+                      )}
+                    </div>
+                  ))
                 )}
               </Card>
-            </Space>
-          ) : (
-            <Card style={{ borderRadius: 8, textAlign: "center", padding: 40 }}>
-              <InfoCircleOutlined style={{ fontSize: 32, color: "#bfbfbf", marginBottom: 12 }} />
-              <Paragraph type="secondary">点击左侧列表中的员工查看详细计算轨迹与调薪。</Paragraph>
-            </Card>
-          )}
+            ) : (
+              <Card style={{ borderRadius: 8, textAlign: "center" }}>
+                <Text type="secondary">请点击左侧表格中的员工查看发薪明细与调整项</Text>
+              </Card>
+            )}
+          </div>
         </Col>
       </Row>
+
+      {/* 算薪公式拆解 Modal */}
+      {formulaModalRow && (
+        <Modal
+          title={
+            <Space>
+              <CalculatorOutlined />
+              <Text>{formulaModalRow.employee.name} - 本月算薪公式拆解</Text>
+            </Space>
+          }
+          open={Boolean(formulaModalRow)}
+          onCancel={() => setFormulaModalRow(null)}
+          footer={[<Button key="close" type="primary" onClick={() => setFormulaModalRow(null)}>关闭明细</Button>]}
+          width={520}
+        >
+          <Descriptions column={1} bordered size="small">
+            <Descriptions.Item label="基础工资">{formatCurrency(formulaModalRow.employee.baseSalary)}</Descriptions.Item>
+            <Descriptions.Item label="加班工资">
+              {formulaModalRow.employee.overtimeRate}元/时 × {formulaModalRow.entry.overtimeHours}时 = +{formatCurrency(formulaModalRow.breakdown.overtimePay)}
+            </Descriptions.Item>
+            <Descriptions.Item label="请假扣款">
+              -{formatCurrency(formulaModalRow.breakdown.leaveDaysDeduction + formulaModalRow.breakdown.leaveHoursDeduction)}
+            </Descriptions.Item>
+            <Descriptions.Item label="全勤/稽核奖励">
+              +{formatCurrency(formulaModalRow.breakdown.attendancePay + formulaModalRow.breakdown.auditPay)}
+            </Descriptions.Item>
+            <Descriptions.Item label="社保/饭补">
+              +{formatCurrency(formulaModalRow.breakdown.socialInsurance + formulaModalRow.breakdown.mealAllowance)}
+            </Descriptions.Item>
+            <Descriptions.Item label="特殊加减调整">
+              {formulaModalRow.breakdown.specialAdjustment >= 0 ? "+" : ""}{formatCurrency(formulaModalRow.breakdown.specialAdjustment)}
+            </Descriptions.Item>
+            <Descriptions.Item label="本月最终实发工资">
+              <span className="tabular-nums" style={{ fontSize: 20, fontWeight: 700, color: "#1677ff" }}>
+                {formatCurrency(formulaModalRow.breakdown.netSalary)}
+              </span>
+            </Descriptions.Item>
+          </Descriptions>
+        </Modal>
+      )}
     </Space>
   );
 }
