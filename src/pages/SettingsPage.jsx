@@ -113,8 +113,9 @@ export function SettingsPage({
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
       <PageHeader
-        eyebrow="门店设置"
+        eyebrow="门店管理"
         title="门店、算薪规则与数据安全"
+
         description="集中维护门店列表、本金计算参数、访问密码与离线数据备份。"
         actions={
           <Button type="primary" size="large" icon={<ShopOutlined />} onClick={onCreateStore}>

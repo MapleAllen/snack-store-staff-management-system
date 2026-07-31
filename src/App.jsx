@@ -88,7 +88,8 @@ const NAV_ITEMS = [
   { key: "attendance", id: "attendance", label: "考勤管理", icon: <CalendarOutlined /> },
   { key: "payroll", id: "payroll", label: "工资管理", icon: <PayCircleOutlined /> },
   { key: "reports", id: "reports", label: "报表中心", icon: <FileTextOutlined /> },
-  { key: "settings", id: "settings", label: "门店设置", icon: <SettingOutlined /> },
+  { key: "settings", id: "settings", label: "门店管理", icon: <SettingOutlined /> },
+
 ];
 
 
