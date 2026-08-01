@@ -1,6 +1,6 @@
 import { OPERATION_TYPES } from "./operationAudit.js";
 
-export const WORKSPACE_VERSION = 27;
+export const WORKSPACE_VERSION = 28;
 export const INITIAL_ASSIGNMENT_MONTH = "2000-01";
 
 export const ATTENDANCE_REASONS = ["排班调整", "门店经营安排", "系统更正", "其他标准原因"];
@@ -8,6 +8,9 @@ export const ASSIGNMENT_REASONS = ["初始门店分配", "新增岗位成员", "
 export const PAYROLL_ADJUSTMENT_REASONS = ["初始薪资设置", "薪资结构调整", "岗位职责调整", "门店经营安排", "其他标准调整"];
 export const PAYROLL_UNLOCK_REASONS = ["考勤录入更正", "薪资调整记录更正", "月结核对差异", "其他标准核对"];
 export const MONTHLY_PAYROLL_ADJUSTMENT_REASONS = ["门店经营奖励", "门店经营扣款", "费用报销", "系统核对修正"];
+export const PAYOUT_METHODS = ["银行转账", "现金发放", "其他线下方式"];
+export const PAYOUT_ROW_STATUSES = ["pending", "paid", "failed"];
+export const PAYSLIP_DELIVERY_STATUSES = ["not-delivered", "delivered", "acknowledged"];
 
 export const DEFAULT_STORE_CONFIG = {
   socialInsuranceBase: 800,
@@ -92,6 +95,30 @@ export function createOpenMonthlyStoreRecord(record = {}) {
     closedAt: record.closedAt ?? null,
     snapshot: Array.isArray(record.snapshot) ? record.snapshot : null,
     closeHistory: Array.isArray(record.closeHistory) ? record.closeHistory : [],
+    payout: normalizePayoutRecord(record.payout),
+  };
+}
+
+function normalizePayoutRecord(payout) {
+  if (!payout || typeof payout !== "object") return null;
+  const rows = Object.fromEntries(Object.entries(payout.rows ?? {}).map(([employeeId, row]) => [employeeId, {
+    paymentStatus: PAYOUT_ROW_STATUSES.includes(row?.paymentStatus) ? row.paymentStatus : "pending",
+    paymentUpdatedAt: row?.paymentUpdatedAt ?? null,
+    payslipStatus: PAYSLIP_DELIVERY_STATUSES.includes(row?.payslipStatus) ? row.payslipStatus : "not-delivered",
+    payslipUpdatedAt: row?.payslipUpdatedAt ?? null,
+  }]));
+  const rowValues = Object.values(rows);
+  const allPaid = rowValues.length > 0 && rowValues.every((row) => row.paymentStatus === "paid");
+  const hasProgress = rowValues.some((row) => row.paymentStatus !== "pending" || row.payslipStatus !== "not-delivered");
+  return {
+    id: `${payout.id ?? ""}`.trim() || null,
+    status: allPaid ? "paid" : hasProgress ? "in-progress" : "pending",
+    plannedPayDate: /^\d{4}-\d{2}-\d{2}$/.test(`${payout.plannedPayDate ?? ""}`) ? payout.plannedPayDate : null,
+    method: PAYOUT_METHODS.includes(payout.method) ? payout.method : PAYOUT_METHODS[0],
+    reference: `${payout.reference ?? ""}`.trim().slice(0, 80),
+    createdAt: payout.createdAt ?? null,
+    completedAt: allPaid ? payout.completedAt ?? null : null,
+    rows,
   };
 }
 

@@ -29,8 +29,8 @@ The module is implemented in `src/pages/HomePage.jsx`. It receives `workspace`, 
 **Payroll confidence and blockers**
 
 - Shows pending employee count, ready-to-close store count, and review exception count.
-- Shows blocker reason summary grouped by each structured blocker issue's Chinese `message`.
-- Shows up to three priority employee blockers with store and employee names.
+- Groups blocker work by store and shows up to three employee reasons inside each store group.
+- Routes salary setup to payroll, attendance/input confirmation to attendance, and close-ready stores to payroll.
 
 **Store cards**
 

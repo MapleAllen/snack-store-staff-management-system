@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Card, Table, Tag, Button, Space, Input, Row, Col, Typography, Avatar, Popconfirm, Drawer, Descriptions, Segmented, Timeline } from "antd";
+import { Card, Table, Tag, Button, Space, Input, Row, Col, Typography, Avatar, Popconfirm, Drawer, Descriptions, Segmented, Timeline, Grid } from "antd";
 import {
   PlusOutlined,
   SwapOutlined,
@@ -14,6 +14,8 @@ import { formatCurrency, getAssignmentAtMonth, getEmployeeAssignments, getEmploy
 const { Text, Title, Paragraph } = Typography;
 
 export function EmployeesPage({ workspace, store, currentMonth, onCreate, onToggleResignation, onTransfer }) {
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [historyDrawerEmployee, setHistoryDrawerEmployee] = useState(null);
@@ -185,7 +187,7 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onTogg
       {/* 页顶分段统计与过滤器 - 替代简单下拉框 */}
       <Card size="small" style={{ borderRadius: 8 }}>
         <Row justify="space-between" align="middle" gutter={[16, 16]}>
-          <Col>
+          <Col xs={24} md="auto" style={{ overflowX: "auto" }}>
             <Segmented
               size="large"
               value={statusFilter}
@@ -198,32 +200,61 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onTogg
               ]}
             />
           </Col>
-          <Col>
+          <Col xs={24} md="auto">
             <Input
               placeholder="搜索成员代号或系统编号"
               prefix={<SearchOutlined />}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ width: 220 }}
+              style={{ width: isMobile ? "100%" : 220 }}
               allowClear
             />
           </Col>
         </Row>
       </Card>
 
-      {/* 瘦身后的全宽员工主表 */}
-      <Card
-        title={`岗位成员列表 (当前显示 ${visibleCards.length} 位)`}
-        style={{ borderRadius: 8 }}
-      >
-        <Table
-          columns={columns}
-          dataSource={visibleCards}
-          rowKey={(item) => item.employee.id}
-          pagination={{ pageSize: 10, showSizeChanger: true }}
-          size="middle"
-        />
-      </Card>
+      {/* 桌面保留高密度表格，移动端切换为可触控员工卡片。 */}
+      {isMobile ? (
+        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          {visibleCards.map(({ employee, currentHere, plannedOut, plannedIn, currentAssignment }) => (
+            <Card
+              key={employee.id}
+              size="small"
+              className="mobile-record-card"
+              title={<Space><Avatar size="small">{employee.name.slice(-1)}</Avatar><Text strong>{employee.name}</Text></Space>}
+              extra={employee.isResigned ? <Tag color="error">已离职</Tag> : !employee.salaryConfigured ? <Tag color="warning">待设薪资</Tag> : <Tag color={currentHere ? "success" : "default"}>{currentHere ? "本店在岗" : "历史成员"}</Tag>}
+            >
+              <div className="mobile-record-grid">
+                <div><Text type="secondary">基础工资</Text><strong>{employee.salaryConfigured ? formatCurrency(employee.baseSalary) : "待设置"}</strong></div>
+                <div><Text type="secondary">全勤奖金</Text><strong>{employee.salaryConfigured ? formatCurrency(employee.attendanceBonus) : "—"}</strong></div>
+              </div>
+              {plannedOut ? <Text type="warning">{plannedOut.startMonth} 调往 {storeMap.get(plannedOut.storeId)?.name}</Text> : null}
+              {plannedIn ? <Text type="success">{plannedIn.startMonth} 调入本店</Text> : null}
+              {!currentHere && currentAssignment ? <Text type="secondary">当前归属：{storeMap.get(currentAssignment.storeId)?.name}</Text> : null}
+              <div className="mobile-record-actions">
+                <Button size="small" icon={<HistoryOutlined />} onClick={() => setHistoryDrawerEmployee(employee)}>查看履历</Button>
+                {currentHere && !employee.isResigned ? <Button size="small" icon={<SwapOutlined />} onClick={() => onTransfer(employee)}>调店</Button> : null}
+                {currentHere ? (
+                  <Popconfirm
+                    title={employee.isResigned ? "确定恢复该员工在职？" : "确定办理该员工离职？"}
+                    onConfirm={() => onToggleResignation(employee, !employee.isResigned)}
+                    okText="确认"
+                    cancelText="取消"
+                  >
+                    <Button size="small" danger={!employee.isResigned} icon={employee.isResigned ? <UserAddOutlined /> : <UserDeleteOutlined />}>
+                      {employee.isResigned ? "恢复在职" : "办理离职"}
+                    </Button>
+                  </Popconfirm>
+                ) : null}
+              </div>
+            </Card>
+          ))}
+        </Space>
+      ) : (
+        <Card title={`岗位成员列表 (当前显示 ${visibleCards.length} 位)`} style={{ borderRadius: 8 }}>
+          <Table columns={columns} dataSource={visibleCards} rowKey={(item) => item.employee.id} pagination={{ pageSize: 10, showSizeChanger: true }} size="middle" />
+        </Card>
+      )}
 
       {/* 匿名成员履历 Drawer */}
       <Drawer

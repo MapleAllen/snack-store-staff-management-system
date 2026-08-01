@@ -33,6 +33,8 @@ const OPERATION_LABELS = {
   "employee-transferred": "成员已调店",
   "payroll-closed": "工资月结已封账",
   "payroll-unlocked": "工资月结已解锁",
+  "payout-created": "发薪批次已创建",
+  "payout-row-updated": "员工发薪交付状态已更新",
   "retail-day-closed": "营业日结已封账",
   "retail-day-reopened": "营业日结已解锁",
   "retail-sale-recorded": "销售单已记录",

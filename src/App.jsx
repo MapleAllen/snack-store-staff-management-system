@@ -13,6 +13,7 @@ import {
 } from "./payrollData.js";
 import {
   buildExportRows,
+  buildPayrollExportMetadata,
   createAdjustmentDraft,
   createEmployeeDraft,
   csvEscape,
@@ -30,6 +31,7 @@ import {
 import {
   archiveStore,
   closeStoreMonth,
+  createPayoutBatch,
   createStore,
   recordSalaryAdjustment,
   renameStore,
@@ -38,6 +40,7 @@ import {
   restoreStore as restoreStoreOperation,
   transferEmployee,
   updateStoreConfig,
+  updatePayoutRow,
   unlockStoreMonth,
 } from "./workspaceOperations.js";
 import { Modal } from "./components/Modal.jsx";
@@ -63,6 +66,8 @@ import {
   Typography,
   Alert,
   ConfigProvider,
+  Drawer,
+  Grid,
 } from "antd";
 import {
   HomeOutlined,
@@ -74,6 +79,7 @@ import {
   ShopOutlined,
   CheckCircleOutlined,
   WarningOutlined,
+  MenuOutlined,
 } from "@ant-design/icons";
 
 const { Header, Content, Sider } = Layout;
@@ -157,6 +163,8 @@ function makeBackupPayload(workspace) {
 }
 
 export function App() {
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
   const fallbackWorkspace = useMemo(createInitialWorkspace, []);
   const [loadedWorkspace, setLoadedWorkspace] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -167,6 +175,7 @@ export function App() {
   const [activeMonth, setActiveMonth] = useState(currentMonth);
   const [activePage, setActivePage] = useState("home");
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
 
   const [notice, setNotice] = useState("");
@@ -389,15 +398,57 @@ export function App() {
       setNotice("请填写解锁原因");
       return;
     }
-    setWorkspace((current) => unlockStoreMonth(current, {
-      storeId: activeStore.id,
-      month: activeMonth,
-      at: new Date().toISOString(),
-      eventId: makeId("unlock"),
-      reason,
-    }));
+    try {
+      setWorkspace(unlockStoreMonth(workspace, {
+        storeId: activeStore.id,
+        month: activeMonth,
+        at: new Date().toISOString(),
+        eventId: makeId("unlock"),
+        reason,
+      }));
+    } catch (error) {
+      setNotice(error.message);
+      return;
+    }
     setUnlockModal(null);
     setNotice("本月工资已解锁，请重新核对后月结");
+  }
+
+  function createCurrentPayoutBatch(draft) {
+    if (!activeStore) return;
+    try {
+      setWorkspace(createPayoutBatch(workspace, {
+        storeId: activeStore.id,
+        month: activeMonth,
+        plannedPayDate: draft.plannedPayDate,
+        method: draft.method,
+        reference: draft.reference,
+        at: new Date().toISOString(),
+        eventId: makeId("payout"),
+      }));
+      setNotice("发薪批次已创建，请逐人记录支付与工资单交付状态");
+    } catch (error) {
+      setNotice(error.message);
+      throw error;
+    }
+  }
+
+  function updateCurrentPayoutRow(employeeId, paymentStatus, payslipStatus) {
+    if (!activeStore) return;
+    try {
+      setWorkspace(updatePayoutRow(workspace, {
+        storeId: activeStore.id,
+        month: activeMonth,
+        employeeId,
+        paymentStatus,
+        payslipStatus,
+        at: new Date().toISOString(),
+        eventId: makeId("payout-row"),
+      }));
+      setNotice("发薪交付状态已更新");
+    } catch (error) {
+      setNotice(error.message);
+    }
   }
 
   function patchStoreConfig(key, value) {
@@ -463,7 +514,7 @@ export function App() {
     setNotice("门店已恢复营业");
   }
 
-  function exportCurrentMonth() {
+  async function exportCurrentMonth() {
     if (!activeStore) return;
     const isFormal = monthlyStore.status === "closed";
     const status = isFormal ? "正式·已月结" : "草稿·未月结";
@@ -471,14 +522,26 @@ export function App() {
     const headers = Object.keys(rows[0] ?? {});
     if (headers.length === 0) return setNotice("当前没有可导出的工资数据");
     const csvLines = [headers.join(","), ...rows.map((row) => headers.map((header) => csvEscape(row[header])).join(","))];
-    const blob = new Blob([`\uFEFF${csvLines.join("\n")}`], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${sanitizeDownloadFileName(activeStore.name)}-${activeMonth}-工资表-${isFormal ? "正式" : "草稿"}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-    setNotice(isFormal ? "正式工资表已导出" : "草稿工资表已导出，月结后再用于发薪");
+    const csvText = `\uFEFF${csvLines.join("\n")}`;
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(csvText));
+    const sha256 = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const baseName = `${sanitizeDownloadFileName(activeStore.name)}-${activeMonth}-工资表-${isFormal ? "正式" : "草稿"}`;
+    const download = (blob, fileName) => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+    };
+    download(new Blob([csvText], { type: "text/csv;charset=utf-8;" }), `${baseName}.csv`);
+    const metadata = buildPayrollExportMetadata(activeStore, activeMonth, payrollRows, monthlyStore, {
+      generatedAt: new Date().toISOString(),
+      artifactFormat: "csv",
+      artifactSha256: sha256,
+    });
+    download(new Blob([JSON.stringify(metadata, null, 2)], { type: "application/json;charset=utf-8;" }), `${baseName}.manifest.json`);
+    setNotice(isFormal ? "正式工资表与校验清单已导出" : "草稿工资表与清单已导出，月结后再用于发薪");
   }
 
   function exportWorkspaceBackup(passphrase) {
@@ -1166,7 +1229,7 @@ export function App() {
       }}
     >
       <Layout style={{ minHeight: "100vh" }}>
-        <Sider
+        {!isMobile ? <Sider
           collapsible
           collapsed={collapsed}
           onCollapse={(value) => setCollapsed(value)}
@@ -1211,12 +1274,31 @@ export function App() {
             items={NAV_ITEMS}
             style={{ borderRight: 0, marginTop: 8 }}
           />
-        </Sider>
+        </Sider> : null}
 
-        <Layout style={{ marginLeft: collapsed ? 80 : 220, transition: "all 0.2s", background: "#f0f2f5" }}>
+        <Drawer
+          title="门店工资助手"
+          placement="left"
+          width={280}
+          open={isMobile && mobileNavigationOpen}
+          onClose={() => setMobileNavigationOpen(false)}
+          styles={{ body: { padding: 0 } }}
+        >
+          <Menu
+            mode="inline"
+            selectedKeys={[activePage]}
+            items={NAV_ITEMS}
+            onClick={({ key }) => {
+              setActivePage(key);
+              setMobileNavigationOpen(false);
+            }}
+          />
+        </Drawer>
+
+        <Layout style={{ marginLeft: isMobile ? 0 : collapsed ? 80 : 220, transition: "all 0.2s", background: "#f0f2f5" }}>
           <Header
             style={{
-              padding: "0 24px",
+              padding: isMobile ? "0 12px" : "0 24px",
               background: "#fff",
               boxShadow: "0 1px 4px rgba(0,21,41,0.08)",
               display: "flex",
@@ -1228,6 +1310,14 @@ export function App() {
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {isMobile ? (
+                <Button
+                  type="text"
+                  aria-label="打开导航"
+                  icon={<MenuOutlined />}
+                  onClick={() => setMobileNavigationOpen(true)}
+                />
+              ) : null}
               <Typography.Title level={4} style={{ margin: 0 }}>
                 {currentFeature?.label}
               </Typography.Title>
@@ -1238,28 +1328,28 @@ export function App() {
                 aria-label="当前门店"
                 value={activeStore.id}
                 onChange={(val) => setActiveStoreId(val)}
-                style={{ width: 160 }}
+                style={{ width: isMobile ? 128 : 160 }}
                 options={activeStores.map((s) => ({ value: s.id, label: s.name }))}
                 prefix={<ShopOutlined />}
               />
               {saveState.status === "error" ? (
                 <Tag color="error">保存失败，请检查导出</Tag>
-              ) : (
+              ) : !isMobile ? (
                 <Tag color="success" icon={<CheckCircleOutlined />}>
                   {formattedSaveTime}
                 </Tag>
-              )}
+              ) : null}
             </Space>
           </Header>
 
-          <Content style={{ padding: "24px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
+          <Content style={{ padding: isMobile ? "16px 12px 32px" : "24px 32px", maxWidth: 1400, margin: "0 auto", width: "100%", minWidth: 0 }}>
             <Suspense fallback={<div style={{ minHeight: 280, display: "grid", placeItems: "center", color: "#595959" }}>正在加载工作区…</div>}>
             {activePage === "home" ? <HomePage workspace={workspace} activeMonth={activeMonth} onNavigate={setActivePage} onSelectStore={setActiveStoreId} onSelectEmployee={setSelectedEmployeeId} openAdjustmentModal={openAdjustmentModal} onNavigateToEmployee={handleNavigateToEmployee} /> : null}
             {activePage === "employees" ? <EmployeesPage workspace={workspace} store={activeStore} currentMonth={currentMonth} onCreate={() => setEmployeeModal({ mode: "create", draft: createEmployeeDraft() })} onToggleResignation={handleToggleResignation} onTransfer={openTransferModal} /> : null}
             {activePage === "attendance" ? <AttendancePage store={activeStore} activeMonth={activeMonth} rows={payrollRows} patchEntry={patchMonthlyEntry} toggleComplete={toggleEntryComplete} isLocked={isLocked} onNavigate={setActivePage} /> : null}
             {activePage === "reports" ? <ReportsPage workspace={workspace} activeMonth={activeMonth} setActiveMonth={setActiveMonth} onSelectStore={setActiveStoreId} onNavigate={setActivePage} /> : null}
             {activePage === "settings" ? <SettingsPage store={activeStoreView} stores={workspace.stores} patchConfig={patchStoreConfig} onExportBackup={exportWorkspaceBackup} onImportBackup={prepareWorkspaceRestore} onCreateStore={() => setStoreModal({ mode: "create", name: "" })} onEditStore={(store) => setStoreModal({ mode: "edit", storeId: store.id, name: store.name })} onArchiveStore={requestArchiveStore} onRestoreStore={restoreStore} autoBackups={autoBackups} autoBackupAvailable={Boolean(desktopApi)} autoBackupBusy={autoBackupBusy} onCreateAutoBackup={() => createAutomaticBackup(BACKUP_REASONS.MANUAL)} onRestoreAutoBackup={prepareAutomaticRestore} onRequestLock={() => setAppLocked(true)} onResetDemoWorkspace={() => setDemoResetModal(true)} ruleHistory={(workspace.ruleHistory ?? []).filter((record) => record.storeId === activeStore.id)} operationLog={workspace.operationLog ?? []} /> : null}
-            {activePage === "payroll" ? <PayrollPage activeStore={activeStoreView} activeMonth={activeMonth} setActiveMonth={setActiveMonth} exportCurrentMonth={exportCurrentMonth} totalNetSalary={totalNetSalary} forecastNetSalary={forecastNetSalary} payrollRows={payrollRows} touchedRows={touchedRows} exceptionCount={exceptionCount} completionRate={completionRate} monthlyStore={monthlyStore} selectedRow={selectedRow} setSelectedEmployeeId={setSelectedEmployeeId} patchMonthlyEntry={patchMonthlyEntry} toggleEntryComplete={toggleEntryComplete} setEmployeeModal={setEmployeeModal} openAdjustmentModal={openAdjustmentModal} isLocked={isLocked} onClosePayroll={requestClosePayroll} onUnlockPayroll={() => setUnlockModal({ reason: PAYROLL_UNLOCK_REASONS[0] })} /> : null}
+            {activePage === "payroll" ? <PayrollPage activeStore={activeStoreView} activeMonth={activeMonth} setActiveMonth={setActiveMonth} exportCurrentMonth={exportCurrentMonth} totalNetSalary={totalNetSalary} forecastNetSalary={forecastNetSalary} payrollRows={payrollRows} touchedRows={touchedRows} exceptionCount={exceptionCount} completionRate={completionRate} monthlyStore={monthlyStore} selectedRow={selectedRow} setSelectedEmployeeId={setSelectedEmployeeId} patchMonthlyEntry={patchMonthlyEntry} toggleEntryComplete={toggleEntryComplete} setEmployeeModal={setEmployeeModal} openAdjustmentModal={openAdjustmentModal} isLocked={isLocked} onClosePayroll={requestClosePayroll} onUnlockPayroll={() => setUnlockModal({ reason: PAYROLL_UNLOCK_REASONS[0] })} onCreatePayout={createCurrentPayoutBatch} onUpdatePayoutRow={updateCurrentPayoutRow} /> : null}
             </Suspense>
           </Content>
         </Layout>

@@ -4,9 +4,11 @@ import { PAYROLL_FORMULA_METADATA, createPayrollIssue, getAssignmentAtMonth, get
 import {
   archiveStore,
   closeStoreMonth,
+  createPayoutBatch,
   createStore,
   restoreStore,
   transferEmployee,
+  updatePayoutRow,
   unlockStoreMonth,
 } from "./workspaceOperations.js";
 
@@ -118,5 +120,57 @@ describe("payroll close and unlock", () => {
     const rows = getStorePayrollRows(initial, "2026-06", store).map((row) => ({ ...row, entry: { ...row.entry, isComplete: true } }));
     rows[0] = { ...rows[0], validationIssues: [createPayrollIssue("PAYROLL_ENTRY_OVERTIME_HOURS_NON_NEGATIVE", "error", "entry.overtimeHours", "加班时长不能小于 0")] };
     expect(() => closeStoreMonth(initial, { storeId: store.id, month: "2026-06", rows, at: "now", eventId: "close", reason: "" })).toThrow("无效工资数据");
+  });
+});
+
+describe("payroll payout handoff", () => {
+  it("creates a payout batch from the frozen snapshot and tracks each employee", () => {
+    const initial = createInitialWorkspace();
+    const store = initial.stores[0];
+    const rows = getStorePayrollRows(initial, "2026-06", store).map((row) => ({ ...row, entry: { ...row.entry, isComplete: true } }));
+    const closed = closeStoreMonth(initial, { storeId: store.id, month: "2026-06", rows, at: "2026-06-20T00:00:00Z", eventId: "close-1", reason: "工资核对完成" });
+    const batched = createPayoutBatch(closed, {
+      storeId: store.id,
+      month: "2026-06",
+      plannedPayDate: "2026-06-28",
+      method: "银行转账",
+      reference: "demo-batch-001",
+      at: "2026-06-21T00:00:00Z",
+      eventId: "payout-1",
+    });
+    const payout = getMonthlyStoreRecord(batched, "2026-06", store.id).payout;
+    expect(payout.status).toBe("pending");
+    expect(Object.keys(payout.rows)).toHaveLength(rows.length);
+
+    const updated = updatePayoutRow(batched, {
+      storeId: store.id,
+      month: "2026-06",
+      employeeId: rows[0].employee.id,
+      paymentStatus: "paid",
+      payslipStatus: "acknowledged",
+      at: "2026-06-28T08:00:00Z",
+      eventId: "payout-row-1",
+    });
+    const updatedPayout = getMonthlyStoreRecord(updated, "2026-06", store.id).payout;
+    expect(updatedPayout.status).toBe("in-progress");
+    expect(updatedPayout.rows[rows[0].employee.id]).toMatchObject({ paymentStatus: "paid", payslipStatus: "acknowledged" });
+    expect(() => unlockStoreMonth(updated, { storeId: store.id, month: "2026-06", at: "2026-06-29T00:00:00Z", eventId: "unlock-after-pay", reason: "月结核对差异" })).toThrow("不能直接解锁");
+  });
+
+  it("normalizes payout fields when migrating an existing workspace", () => {
+    const initial = createInitialWorkspace();
+    const storeId = initial.stores[0].id;
+    const employeeId = initial.employees[0].id;
+    initial.monthlyRecords = { "2026-06": { [storeId]: { status: "closed", rows: {}, snapshot: [], payout: {
+      id: "payout-old",
+      plannedPayDate: "2026-06-28",
+      method: "unsupported",
+      rows: { [employeeId]: { paymentStatus: "unknown", payslipStatus: "acknowledged" } },
+    } } } };
+    const migrated = migrateWorkspace(initial);
+    const payout = getMonthlyStoreRecord(migrated, "2026-06", storeId).payout;
+    expect(migrated.version).toBe(WORKSPACE_VERSION);
+    expect(payout.method).toBe("银行转账");
+    expect(payout.rows[employeeId]).toMatchObject({ paymentStatus: "pending", payslipStatus: "acknowledged" });
   });
 });

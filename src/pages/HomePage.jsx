@@ -55,27 +55,30 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore, on
     : totalInvalid
       ? { label: "修正考勤输入错误", hint: `存在 ${totalInvalid} 条异常考勤数据需优先更正`, storeId: nextInvalid?.storeId, employeeId: nextInvalid?.blockers?.[0]?.employeeId, targetPage: "attendance" }
       : totalPending
-        ? { label: "确认员工考勤发薪明细", hint: `仍有 ${totalPending} 位员工等待录入确认完成`, storeId: nextPending?.storeId, employeeId: nextPending?.blockers?.[0]?.employeeId, targetPage: "payroll" }
+        ? { label: "完成员工考勤确认", hint: `仍有 ${totalPending} 位员工等待录入确认完成`, storeId: nextPending?.storeId, employeeId: nextPending?.blockers?.[0]?.employeeId, targetPage: "attendance" }
         : totalExceptions
           ? { label: "复核请假与调整变动", hint: `${totalExceptions} 位员工包含请假扣分或特殊调薪`, storeId: nextIssue?.storeId, employeeId: nextIssue?.reviews?.[0]?.employeeId ?? nextIssue?.blockers?.[0]?.employeeId, targetPage: "payroll" }
           : readyStores.length
             ? { label: "执行门店月结封账", hint: `${readyStores.length} 家门店数据核对无误，可直接封账`, storeId: nextReady?.storeId, targetPage: "payroll" }
             : { label: "查看月结工资报表", hint: `全店 ${closedStores} 家门店已完成本月月结`, storeId: storeSummaries[0]?.storeId, targetPage: "reports" };
 
-  const priorityRows = storeSummaries
-    .flatMap((item) => item.blockers.map((blocker) => {
-      const firstIssue = blocker.issues[0];
-      const isSalaryPending = firstIssue?.code === "PAYROLL_EMPLOYEE_SALARY_PENDING" || firstIssue?.code === "CLOSE_EMPLOYEE_SALARY_PENDING";
-      const isAttendanceError = firstIssue?.code?.includes("LEAVE") || firstIssue?.code?.includes("ATTENDANCE");
-      return {
-        storeId: item.storeId,
-        storeName: item.storeName,
-        employeeId: blocker.employeeId,
-        employeeName: blocker.employeeName,
-        reason: getPayrollIssueMessage(firstIssue),
-        isSalaryPending,
-        targetPage: isAttendanceError ? "attendance" : "payroll",
-      };
+  const priorityGroups = storeSummaries
+    .filter((item) => item.blockers.length > 0)
+    .map((item) => ({
+      ...item,
+      blockerRows: item.blockers.map((blocker) => {
+        const firstIssue = blocker.issues[0];
+        const isSalaryPending = firstIssue?.code === "PAYROLL_EMPLOYEE_SALARY_PENDING" || firstIssue?.code === "CLOSE_EMPLOYEE_SALARY_PENDING";
+        const isAttendanceError = firstIssue?.code?.includes("LEAVE") || firstIssue?.code?.includes("ATTENDANCE");
+        const isUnconfirmed = firstIssue?.field === "entry.isComplete";
+        return {
+          employeeId: blocker.employeeId,
+          employeeName: blocker.employeeName,
+          reason: getPayrollIssueMessage(firstIssue),
+          isSalaryPending,
+          targetPage: isAttendanceError || isUnconfirmed ? "attendance" : "payroll",
+        };
+      }),
     }));
 
   function handleGoTo(storeId, employeeId, targetPage = "payroll", isSalaryPending = false) {
@@ -195,7 +198,7 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore, on
         >
           <List
             size="small"
-            dataSource={priorityRows}
+            dataSource={priorityGroups}
             renderItem={(item) => (
               <List.Item
                 actions={[
@@ -206,7 +209,8 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore, on
                     size="small"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleGoTo(item.storeId, item.employeeId, item.targetPage, item.isSalaryPending);
+                      const first = item.blockerRows[0];
+                      handleGoTo(item.storeId, first?.employeeId, first?.targetPage, first?.isSalaryPending);
                     }}
                   >
                     去处理
@@ -215,8 +219,15 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore, on
               >
                 <List.Item.Meta
                   avatar={<ShopOutlined style={{ fontSize: 18, color: "#1677ff" }} />}
-                  title={<Text strong>{item.storeName} · {item.employeeName}</Text>}
-                  description={<Text type="danger">{item.reason}</Text>}
+                  title={<Text strong>{item.storeName} · {item.blockerCount} 位员工待处理</Text>}
+                  description={
+                    <Space direction="vertical" size={2}>
+                      {item.blockerRows.slice(0, 3).map((row) => (
+                        <Text type="secondary" key={row.employeeId}>{row.employeeName}：{row.reason}</Text>
+                      ))}
+                      {item.blockerRows.length > 3 ? <Text type="secondary">另有 {item.blockerRows.length - 3} 位员工</Text> : null}
+                    </Space>
+                  }
                 />
               </List.Item>
             )}

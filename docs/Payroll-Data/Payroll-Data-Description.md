@@ -16,15 +16,15 @@ The module is implemented in `src/payrollData.js`. It exports schema constants, 
 
 **Workspace identity and versioning**
 
-- Exports `WORKSPACE_VERSION = 26` as the current workspace schema version.
+- Exports `WORKSPACE_VERSION = 28` as the current workspace schema version.
 - Exports `INITIAL_ASSIGNMENT_MONTH = "2000-01"` for seed assignment history.
 - Provides `createDefaultMonthValue(date = new Date())`, returning `YYYY-MM` for UI month selectors.
 
 **Default store and payroll row shape**
 
 - Defines `DEFAULT_STORE_CONFIG` with `socialInsuranceBase: 800`, `mealAllowanceBase: 200`, `auditPassedBonus: 200`, `auditFallbackBonus: 100`, `nightShiftRate: 0`, `leaveDaysDivisor: 30`, `leaveHoursDivisor: 270`, and `monthDays: 30`.
-- Provides `defaultMonthlyEntry()` with string input fields for overtime, leave, night shift, special adjustment, note, `auditPassed: false`, `isComplete: false`, and `completedAt: null`.
-- Provides `createOpenMonthlyStoreRecord(record = {})` to normalize month-store records with `rows`, `savedAt`, `status`, `closedAt`, `snapshot`, and `closeHistory`.
+- Provides `defaultMonthlyEntry()` with string input fields for overtime, leave, night shift and legacy special adjustment, plus structured payroll adjustments, controlled attendance reason, completion, and confirmation time.
+- Provides `createOpenMonthlyStoreRecord(record = {})` to normalize month-store records with `rows`, close state, frozen snapshot, close history, and the optional payout batch.
 
 **Generic demo workspace**
 
@@ -35,7 +35,7 @@ The module is implemented in `src/payrollData.js`. It exports schema constants, 
 
 **Migration and normalization**
 
-- `migrateWorkspace(workspace)` returns the current v26 workspace shape and normalizes stores, employees, assignments, adjustments, rule history, operation logs, monthly records, and operating records.
+- `migrateWorkspace(workspace)` returns the current v28 workspace shape and normalizes stores, employees, assignments, adjustments, rule history, operation logs, monthly records, optional payout rows, and legacy operating records.
 - `migrateLegacyWorkspace(workspace)` handles older workspaces that do not have `assignments` by reconstructing employees and initial store assignments from legacy nested store data.
 - `normalizeEmployee(employee)` sets `salaryConfigured` to true unless the existing record explicitly has `salaryConfigured: false`.
 - `normalizeStore(store)` merges every store config with `DEFAULT_STORE_CONFIG` and normalizes `status`, `createdAt`, and `archivedAt`.
@@ -65,7 +65,7 @@ Payroll-Data is a single-file data contract and migration module. It is intentio
 - `createOpenMonthlyStoreRecord(record)`
   - Normalizes open and closed store-month records.
 - `migrateWorkspace(workspace)`
-  - Converts old and current workspace-like input into the current v3 shape.
+  - Converts old and current workspace-like input into the current versioned shape.
 - `mergeWorkspaceWithTemplates`
   - Alias of `migrateWorkspace`; retained for compatibility with older import names.
 - `VIEW_OPTIONS` and `EMPLOYEE_FIELDS`
@@ -75,22 +75,28 @@ Payroll-Data is a single-file data contract and migration module. It is intentio
 
 ```js
 {
-  version: 26,
+  version: 28,
   stores: [{ id, name, config, status, createdAt, archivedAt }],
   employees: [{
     id, name, baseSalary, overtimeRate, attendanceBonus,
     salaryConfigured, isResigned, resignationDate
   }],
-  assignments: [{ id, employeeId, storeId, startMonth, endMonth, createdAt, note }],
+  assignments: [{ id, employeeId, storeId, startMonth, endMonth, createdAt, reason }],
   adjustments: [{
     id, employeeId, employeeName, storeId, item, itemLabel,
-    previousValue, newValue, changes, date, notes
+    previousValue, newValue, changes, date, reason
   }],
   ruleHistory: [{ id, storeId, key, label, previousValue, newValue, at }],
   operationLog: [{ id, type, storeId, employeeId, memberCode, month, businessDate, key, at }],
   monthlyRecords: {
     [month]: {
-      [storeId]: { rows, savedAt, status, closedAt, snapshot, closeHistory }
+      [storeId]: {
+        rows, savedAt, status, closedAt, snapshot, closeHistory,
+        payout: {
+          id, status, plannedPayDate, method, reference, createdAt, completedAt,
+          rows: { [employeeId]: { paymentStatus, paymentUpdatedAt, payslipStatus, payslipUpdatedAt } }
+        } | null
+      }
     }
   }
 }

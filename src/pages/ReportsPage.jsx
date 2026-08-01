@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Alert, Button, Card, Checkbox, Col, Row, Space, Table, Tag, Typography } from "antd";
+import { Alert, Button, Card, Checkbox, Col, Row, Space, Table, Tag, Typography, Grid } from "antd";
 import { ArrowRightOutlined, BarChartOutlined, ShopOutlined } from "@ant-design/icons";
 import { PageHeader } from "../components/PageHeader.jsx";
 import { StatCard } from "../components/StatCard.jsx";
@@ -31,6 +31,8 @@ function getStageStatus(stage) {
 }
 
 export function ReportsPage({ workspace, activeMonth, setActiveMonth, onSelectStore, onNavigate }) {
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
   const [includeArchived, setIncludeArchived] = useState(false);
   const stores = useMemo(
     () => workspace.stores.filter((store) => includeArchived || store.status === "active"),
@@ -47,7 +49,11 @@ export function ReportsPage({ workspace, activeMonth, setActiveMonth, onSelectSt
       (total, row) => total + Number(row.breakdown.leaveDaysDeduction ?? 0) + Number(row.breakdown.leaveHoursDeduction ?? 0),
       0,
     );
-    return { store, rows, stage, blockerCount, overtimeTotal, leaveDeductionTotal };
+    const payout = monthlyStore.payout ?? null;
+    const payoutRows = Object.values(payout?.rows ?? {});
+    const paidCount = payoutRows.filter((row) => row.paymentStatus === "paid").length;
+    const deliveredCount = payoutRows.filter((row) => ["delivered", "acknowledged"].includes(row.payslipStatus)).length;
+    return { store, rows, stage, blockerCount, overtimeTotal, leaveDeductionTotal, payout, paidCount, deliveredCount };
   }), [workspace, activeMonth, stores]);
 
   const totals = summaries.reduce((result, item) => ({
@@ -80,6 +86,7 @@ export function ReportsPage({ workspace, activeMonth, setActiveMonth, onSelectSt
     { title: "加班薪资", key: "overtime", align: "right", render: (_, item) => formatCurrency(item.overtimeTotal) },
     { title: "请假扣款", key: "leave", align: "right", render: (_, item) => item.leaveDeductionTotal ? <Text type="warning">-{formatCurrency(item.leaveDeductionTotal)}</Text> : "—" },
     { title: "状态", key: "status", render: (_, item) => { const status = getStageStatus(item.stage); return <Tag color={status.color}>{status.label}</Tag>; } },
+    { title: "发薪交付", key: "payout", render: (_, item) => item.stage.isClosed ? item.payout ? <Space direction="vertical" size={0}><Text>{item.paidCount}/{item.stage.employeeCount} 已支付</Text><Text type="secondary">{item.deliveredCount}/{item.stage.employeeCount} 已交工资单</Text></Space> : <Tag color="warning">待创建批次</Tag> : "—" },
     {
       title: "操作",
       key: "action",
@@ -107,7 +114,28 @@ export function ReportsPage({ workspace, activeMonth, setActiveMonth, onSelectSt
       </Row>
 
       <Card title="门店工资状态" extra={<Tag color="blue">{activeMonth}</Tag>}>
-        <Table rowKey={(item) => item.store.id} columns={columns} dataSource={summaries} pagination={false} scroll={{ x: 960 }} locale={{ emptyText: "暂无可显示的门店" }} />
+        {isMobile ? (
+          <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+            {summaries.map((item) => {
+              const status = getStageStatus(item.stage);
+              return (
+                <div className="mobile-record-card mobile-record-card--flat" key={item.store.id}>
+                  <div className="mobile-record-heading"><Text strong>{item.store.name}</Text><Tag color={status.color}>{status.label}</Tag></div>
+                  <div className="mobile-record-grid">
+                    <div><Text type="secondary">核对完成</Text><strong>{item.stage.confirmedCount} / {item.stage.employeeCount} 人</strong></div>
+                    <div><Text type="secondary">确认/封账金额</Text><strong>{formatCurrency(item.stage.isClosed ? item.stage.closedTotal : item.stage.confirmedTotal)}</strong></div>
+                    <div><Text type="secondary">预计实发</Text><strong>{formatCurrency(item.stage.forecastTotal)}</strong></div>
+                    <div><Text type="secondary">请假扣款</Text><strong>{item.leaveDeductionTotal ? `-${formatCurrency(item.leaveDeductionTotal)}` : "—"}</strong></div>
+                    <div><Text type="secondary">发薪交付</Text><strong>{item.stage.isClosed ? item.payout ? `${item.paidCount}/${item.stage.employeeCount} 已支付` : "待创建批次" : "月结后开始"}</strong></div>
+                  </div>
+                  <Button block type="primary" ghost disabled={item.store.status === "archived"} onClick={() => { onSelectStore(item.store.id); onNavigate("payroll"); }}>进入工资管理</Button>
+                </div>
+              );
+            })}
+          </Space>
+        ) : (
+          <Table rowKey={(item) => item.store.id} columns={columns} dataSource={summaries} pagination={false} scroll={{ x: 960 }} locale={{ emptyText: "暂无可显示的门店" }} />
+        )}
       </Card>
 
       <Card title={<Space><BarChartOutlined />近六个月已确认工资趋势</Space>} extra={<Text type="secondary">未封账月份按已确认金额统计</Text>}>

@@ -1,4 +1,13 @@
-import { ASSIGNMENT_REASONS, createAnonymousMemberCode, createOpenMonthlyStoreRecord, EMPLOYEE_FIELDS, PAYROLL_ADJUSTMENT_REASONS } from "./payrollData.js";
+import {
+  ASSIGNMENT_REASONS,
+  createAnonymousMemberCode,
+  createOpenMonthlyStoreRecord,
+  EMPLOYEE_FIELDS,
+  PAYOUT_METHODS,
+  PAYOUT_ROW_STATUSES,
+  PAYROLL_ADJUSTMENT_REASONS,
+  PAYSLIP_DELIVERY_STATUSES,
+} from "./payrollData.js";
 import { clonePayrollFormulaMetadata, getAssignmentAtMonth, getMonthlyStoreRecord, previousMonth, validateStoreConfig } from "./payrollLogic.js";
 import { appendOperationLog } from "./operationAudit.js";
 
@@ -219,6 +228,9 @@ export function unlockStoreMonth(workspace, { storeId, month, at, eventId, reaso
   if (!reason.trim()) throw new Error("请填写解锁原因");
   const monthBucket = workspace.monthlyRecords[month] ?? {};
   const storeBucket = createOpenMonthlyStoreRecord(monthBucket[storeId]);
+  if (Object.values(storeBucket.payout?.rows ?? {}).some((row) => row.paymentStatus === "paid")) {
+    throw new Error("已有员工记录为已支付，不能直接解锁；请先完成线下冲正并保留审计凭证");
+  }
   return appendOperationLog({
     ...workspace,
     monthlyRecords: {
@@ -226,10 +238,79 @@ export function unlockStoreMonth(workspace, { storeId, month, at, eventId, reaso
       [month]: {
         ...monthBucket,
         [storeId]: {
-          ...storeBucket, status: "open", closedAt: null, snapshot: null,
+          ...storeBucket, status: "open", closedAt: null, snapshot: null, payout: null,
           closeHistory: [...storeBucket.closeHistory, { id: eventId, type: "unlocked", at, reason: reason.trim() }],
         },
       },
     },
   }, { id: eventId, type: "payroll-unlocked", storeId, month, at });
+}
+
+export function createPayoutBatch(workspace, { storeId, month, plannedPayDate, method, reference, at, eventId }) {
+  assertIsoDate(plannedPayDate, "计划发薪日期");
+  if (!PAYOUT_METHODS.includes(method)) throw new Error("发薪方式无效");
+  const monthBucket = workspace.monthlyRecords[month] ?? {};
+  const storeBucket = createOpenMonthlyStoreRecord(monthBucket[storeId]);
+  if (storeBucket.status !== "closed" || !Array.isArray(storeBucket.snapshot) || storeBucket.snapshot.length === 0) {
+    throw new Error("请先完成门店月结再创建发薪批次");
+  }
+  if (storeBucket.payout) throw new Error("本月发薪批次已存在");
+  const rows = Object.fromEntries(storeBucket.snapshot.map((row) => [row.employee.id, {
+    paymentStatus: "pending",
+    paymentUpdatedAt: null,
+    payslipStatus: "not-delivered",
+    payslipUpdatedAt: null,
+  }]));
+  const payout = {
+    id: eventId,
+    status: "pending",
+    plannedPayDate,
+    method,
+    reference: `${reference ?? ""}`.trim().slice(0, 80),
+    createdAt: at,
+    completedAt: null,
+    rows,
+  };
+  return appendOperationLog({
+    ...workspace,
+    monthlyRecords: {
+      ...workspace.monthlyRecords,
+      [month]: { ...monthBucket, [storeId]: { ...storeBucket, payout, savedAt: at } },
+    },
+  }, { id: eventId, type: "payout-created", storeId, month, at });
+}
+
+export function updatePayoutRow(workspace, { storeId, month, employeeId, paymentStatus, payslipStatus, at, eventId }) {
+  if (!PAYOUT_ROW_STATUSES.includes(paymentStatus)) throw new Error("支付状态无效");
+  if (!PAYSLIP_DELIVERY_STATUSES.includes(payslipStatus)) throw new Error("工资单交付状态无效");
+  const monthBucket = workspace.monthlyRecords[month] ?? {};
+  const storeBucket = createOpenMonthlyStoreRecord(monthBucket[storeId]);
+  if (storeBucket.status !== "closed" || !storeBucket.payout) throw new Error("未找到可更新的发薪批次");
+  if (!storeBucket.payout.rows[employeeId]) throw new Error("员工不在本次冻结工资名单中");
+  const previous = storeBucket.payout.rows[employeeId];
+  const nextRows = {
+    ...storeBucket.payout.rows,
+    [employeeId]: {
+      paymentStatus,
+      paymentUpdatedAt: paymentStatus === previous.paymentStatus ? previous.paymentUpdatedAt : at,
+      payslipStatus,
+      payslipUpdatedAt: payslipStatus === previous.payslipStatus ? previous.payslipUpdatedAt : at,
+    },
+  };
+  const rowValues = Object.values(nextRows);
+  const allPaid = rowValues.length > 0 && rowValues.every((row) => row.paymentStatus === "paid");
+  const hasProgress = rowValues.some((row) => row.paymentStatus !== "pending" || row.payslipStatus !== "not-delivered");
+  const payout = {
+    ...storeBucket.payout,
+    rows: nextRows,
+    status: allPaid ? "paid" : hasProgress ? "in-progress" : "pending",
+    completedAt: allPaid ? at : null,
+  };
+  return appendOperationLog({
+    ...workspace,
+    monthlyRecords: {
+      ...workspace.monthlyRecords,
+      [month]: { ...monthBucket, [storeId]: { ...storeBucket, payout, savedAt: at } },
+    },
+  }, { id: eventId, type: "payout-row-updated", storeId, employeeId, month, at });
 }
