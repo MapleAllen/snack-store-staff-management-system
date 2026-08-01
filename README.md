@@ -35,14 +35,3 @@ npm run electron:dev
 
 数据保存在本地且未加密；请使用受保护的 Windows 账户和独立备份介质。项目目前只发布源代码，尚未提供签名 Windows 安装渠道。
 
-## 发布新版本（家人/内部更新）
-
-1. 更新 `package.json` 中的 `version`，并在 `CHANGELOG.md` 记录变更。
-2. 运行 `npm run dist:win` 生成安装包。
-3. 创建 GitHub Release 并上传安装包（安装包名称需包含 `Setup` 且以 `.exe` 结尾）：
-
-```bash
-gh release create v2.0.1 "release/门店工资助手 Setup 2.0.1.exe" --title "门店工资助手 v2.0.1" --notes "更新说明"
-```
-
-家人电脑上的应用会在启动时自动检查最新 Release 并提示下载。无签名安装包仍会触发 SmartScreen 警告，首次安装需选择"更多信息 → 仍要运行"。
