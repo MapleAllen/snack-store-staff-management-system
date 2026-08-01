@@ -55,9 +55,9 @@ The contracts below freeze scope and evidence rules for this phase. Runtime code
 
 ### 2.1 Default Version Strategy
 
-- 当前仓库元数据停留在 `2.0.0`，但 `main` 已包含硬化实现、文档同步和后续修复。
-- 若本阶段不引入新的用户可见业务功能，默认将下一个版本切点定为 `2.0.1`。
-- 只有在范围扩大到新增产品能力时，才改为 `2.1.0` 或更高次版本。
+- `v2.0.0` 之后的 `main` 已包含桌面硬化、工资追踪、发薪交付、员工档案和全新工作区等用户可见能力。
+- 本次版本切点确定为 `2.1.0`，符合新增向后兼容产品能力的次版本语义。
+- 后续仅修复 `2.1.x` 缺陷时使用补丁版本；新增产品能力时再递增次版本。
 
 ### 2.2 Required File Alignment
 
@@ -159,7 +159,7 @@ The contracts below freeze scope and evidence rules for this phase. Runtime code
 ## Completion Evidence
 
 - Shared contract diff
-- Recorded version strategy (`2.0.1` by default unless explicitly revised)
+- Recorded version strategy (`2.1.0` for the expanded user-visible feature scope)
 - Recorded unsigned/public-boundary rule
 - Recorded evidence carry-forward rule
 

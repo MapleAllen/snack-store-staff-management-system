@@ -1,14 +1,17 @@
 # Changelog
 
-## Unreleased
+## 2.1.0 - 2026-08-02
 
-- Replaced anonymous member codes with real employee profiles: name, phone, employee number, role, and hire date, with editable profiles and audited changes.
-- Added a desktop startup check against GitHub Releases that prompts the user to download the installer when a newer version exists; no silent install and no business data leaves the machine.
-- Fixed the per-employee confirmation path so an unconfirmed row can be confirmed from payroll instead of disabling its own action.
-- Grouped owner dashboard blockers by store and corrected confirmation denominators.
-- Restored responsive drawer navigation and mobile card layouts while preserving the desktop payroll split workspace.
-- Added post-close payout batches, per-employee payment and payslip delivery status, and printable anonymized payslips.
+- Added canonical desktop workspace storage, automatic recovery points, PIN access protection, and optional passphrase-protected backups.
+- Added a desktop startup check against GitHub Releases that can prompt for a newer installer without silent installation or uploading business data.
+- Added payroll calculation traces, formula metadata, structured salary adjustments, and all-store close-readiness summaries.
+- Added post-close payout batches, per-employee payment and payslip delivery status, and printable payslips.
 - Added CSV manifest sidecars with payroll metadata and SHA-256 artifact checksums.
+- Added editable employee profiles with names, phone numbers, employee numbers, roles, hire dates, history, resignation, and month-based store transfers.
+- Rebuilt the desktop-first workspace with Ant Design, owner-focused blockers and next actions, responsive navigation, and mobile card layouts.
+- Fixed the per-employee confirmation path, dashboard denominators, report totals, restored PIN/backup controls, and cryptographically secure ID generation.
+- Updated Electron and frontend dependencies and restored a clean high-severity dependency audit.
+- Public distribution remains source-only because no signed Windows release channel exists.
 
 ## 2.0.0 - 2026-06-21
 

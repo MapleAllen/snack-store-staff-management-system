@@ -102,7 +102,7 @@ Storage-Adapter is a renderer facade over browser storage and Electron IPC. Desk
 - The canonical desktop workspace file is plaintext JSON in v2.x.
 - The workspace envelope is structurally validated but does not include a checksum or tamper-evident hash.
 - Browser `getStorageStatus()` and desktop `getStatus()` return static status rather than live save queue state.
-- The desktop save envelope hardcodes `version: "2.0.0"` instead of deriving it from the app version or workspace version.
+- The desktop save envelope hardcodes the current release version instead of deriving it from the app version or workspace version.
 - Bridge migration reads old browser `localStorage` but intentionally does not delete it.
 - There is no multi-instance lock; two desktop app instances could race to write the same workspace file.
 - There is no write-ahead journal or fsync-based durability step beyond temp-file plus rename.

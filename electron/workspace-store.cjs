@@ -45,7 +45,7 @@ function createWorkspaceStore({ baseDir, now = () => new Date() }) {
     try {
       const document = {
         type: BACKUP_TYPE,
-        version: "2.0.0",
+        version: "2.1.0",
         storageKey: STORAGE_KEY,
         exportedAt: now().toISOString(),
         reason: "workspace-save",

@@ -36,7 +36,7 @@ Working branch: `main`
 - `package.json` 已具备 `package:win` 和 `dist:win`，但没有签名接线、制品校验信息或自动上传流程：`package.json:21-30`, `package.json:41-76`
 - 已归档的上一阶段验证文档仍写明 Windows manual checks `NOT RUN`，与当前“真机验证已完成”的外部事实不一致：`plan/completed/desktop-commercial-hardening/04-verification.md:19-35`, `plan/completed/desktop-commercial-hardening/04-verification.md:57-66`
 - 已归档的上一阶段集成门仍是 conditional close，并把 Windows host evidence 作为唯一明确缺口：`plan/completed/desktop-commercial-hardening/05-review-and-integration.md:94-111`
-- 当前 `package.json` 和 `CHANGELOG.md` 仍停留在 `2.0.0`，未体现硬化收尾与后续修复：`package.json:1-30`, `CHANGELOG.md:1-10`
+- `v2.0.0` 后的硬化、工资交付和员工档案能力已达到 `2.1.0` 次版本范围；发布切点需同步 `package.json` 与 `CHANGELOG.md`。
 
 ## Invariants
 
