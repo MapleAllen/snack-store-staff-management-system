@@ -94,6 +94,7 @@ describe("payroll export metadata", () => {
     expect(metadata.totals.estimated).toBe(rows.reduce((sum, row) => sum + row.breakdown.netSalary, 0));
     expect(metadata.totals.confirmed).toBe(rows[1].breakdown.netSalary + rows[2].breakdown.netSalary);
     expect(metadata.totals.closed).toBe(0);
+    expect(metadata.artifact).toEqual({ format: "csv", sha256: null });
   });
 
   it("builds formal metadata from closed snapshots without recalculating live payroll", () => {
@@ -132,6 +133,8 @@ describe("payroll export metadata", () => {
 
     const metadata = buildPayrollExportMetadata(closedStore, "2026-06", closedRows, monthlyStore, {
       generatedAt: "2026-07-01T08:00:00.000Z",
+      artifactFormat: "csv",
+      artifactSha256: "abc123",
     });
 
     expect(metadata).toMatchObject({
@@ -151,6 +154,7 @@ describe("payroll export metadata", () => {
     expect(metadata.totals.estimated).toBe(snapshot[0].breakdown.netSalary + snapshot[1].breakdown.netSalary);
     expect(metadata.totals.confirmed).toBe(snapshot[0].breakdown.netSalary + snapshot[1].breakdown.netSalary);
     expect(metadata.totals.closed).toBe(snapshot[0].breakdown.netSalary + snapshot[1].breakdown.netSalary);
+    expect(metadata.artifact).toEqual({ format: "csv", sha256: "abc123" });
     expect(metadata.totals.closed).not.toBe(calculatePayroll(closedWorkspace.employees[0], snapshot[0].entry, closedStore.config).netSalary);
   });
 });

@@ -520,6 +520,10 @@ export function buildPayrollExportMetadata(store, month, rows, monthlyStore, opt
       current: clonePayrollFormulaMetadata(options.formulaMetadata ?? PAYROLL_FORMULA_METADATA),
       ...formulaSummary,
     },
+    artifact: {
+      format: options.artifactFormat ?? "csv",
+      sha256: options.artifactSha256 ?? null,
+    },
   };
 }
 
@@ -726,6 +730,7 @@ export function getPayrollMonthCloseReadiness(workspace, month) {
         blockerCount: closeSummary.blockerCount,
         reviewCount: closeSummary.reviewCount,
         cleanCount: closeSummary.cleanCount,
+        employeeCount: stage.employeeCount,
         confirmedCount: stage.confirmedCount,
         pendingCount: stage.pendingCount,
         unconfiguredCount: stage.unconfiguredCount,

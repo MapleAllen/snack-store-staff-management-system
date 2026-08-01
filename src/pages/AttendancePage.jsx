@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Card, Table, InputNumber, Button, Tag, Row, Col, Alert, Space, Tooltip, Typography, Switch, Dropdown, Modal, Select } from "antd";
+import { Card, Table, InputNumber, Button, Tag, Row, Col, Alert, Space, Tooltip, Typography, Switch, Dropdown, Modal, Select, Grid, Steps } from "antd";
 import {
   CheckCircleOutlined,
   ArrowRightOutlined,
@@ -16,6 +16,8 @@ import { ATTENDANCE_REASONS } from "../payrollData.js";
 const { Text } = Typography;
 
 export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleComplete, isLocked, onNavigate }) {
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
   const [batchModal, setBatchModal] = useState(null);
 
   const totalOvertime = rows.reduce((sum, row) => sum + row.breakdown.overtimeHours, 0);
@@ -227,6 +229,21 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
         }
       />
 
+      <Card size="small" className="workflow-steps">
+        <Steps
+          size="small"
+          current={unconfirmedCount > 0 ? 0 : 1}
+          responsive={false}
+          items={[
+            { title: "考勤" },
+            { title: "复核" },
+            { title: "月结" },
+            { title: "发薪" },
+            { title: "完成" },
+          ]}
+        />
+      </Card>
+
       {/* 月结封账警告 */}
       {isLocked && (
         <Alert
@@ -278,14 +295,49 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
         }
         style={{ borderRadius: 8 }}
       >
-        <Table
-          columns={columns}
-          dataSource={rows}
-          rowKey={(row) => row.employee.id}
-          rowClassName={(row) => (row.entry.isComplete ? "row-status-confirmed" : "row-status-pending")}
-          pagination={false}
-          size="middle"
-        />
+        {isMobile ? (
+          <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+            {rows.map((row) => {
+              const confirmationDisabled = isLocked || (!row.entry.isComplete && row.validationIssues.length > 0);
+              return (
+                <div className={`mobile-record-card mobile-record-card--flat ${row.entry.isComplete ? "mobile-record-card--confirmed" : ""}`} key={row.employee.id}>
+                  <div className="mobile-record-heading">
+                    <div><Text strong>{row.employee.name}</Text><Text type="secondary">编号 {row.employee.id.slice(-8)}</Text></div>
+                    <Tag color={row.entry.isComplete ? "success" : "warning"}>{row.entry.isComplete ? "已确认" : "待确认"}</Tag>
+                  </div>
+                  <div className="mobile-input-grid">
+                    <label><span>加班小时</span><InputNumber disabled={isLocked} min={0} step={0.5} value={row.entry.overtimeHours} onChange={(value) => patchEntry(row.employee.id, { overtimeHours: value ?? 0 })} /></label>
+                    <label><span>请假天数</span><InputNumber disabled={isLocked} min={0} step={0.5} value={row.entry.leaveDays} onChange={(value) => patchEntry(row.employee.id, { leaveDays: value ?? 0 })} /></label>
+                    <label><span>请假小时</span><InputNumber disabled={isLocked} min={0} step={0.5} value={row.entry.leaveHours} onChange={(value) => patchEntry(row.employee.id, { leaveHours: value ?? 0 })} /></label>
+                    {store.config.nightShiftRate > 0 ? <label><span>夜班小时</span><InputNumber disabled={isLocked} min={0} step={0.5} value={row.entry.nightShiftHours} onChange={(value) => patchEntry(row.employee.id, { nightShiftHours: value ?? 0 })} /></label> : null}
+                  </div>
+                  <div className="mobile-record-control"><Text type="secondary">全勤/稽核</Text><Switch disabled={isLocked} checked={row.entry.auditPassed} checkedChildren="达标" unCheckedChildren="未达标" onChange={(checked) => patchEntry(row.employee.id, { auditPassed: checked })} /></div>
+                  <Select disabled={isLocked} allowClear value={row.entry.attendanceReason || undefined} placeholder="选择考勤业务原因" options={ATTENDANCE_REASONS.map((reason) => ({ value: reason, label: reason }))} onChange={(attendanceReason) => patchEntry(row.employee.id, { attendanceReason: attendanceReason ?? "" })} style={{ width: "100%" }} />
+                  <Button
+                    block
+                    type={row.entry.isComplete ? "primary" : "default"}
+                    disabled={confirmationDisabled}
+                    danger={!row.entry.isComplete && row.validationIssues.length > 0}
+                    icon={row.entry.isComplete ? <CheckCircleOutlined /> : null}
+                    onClick={() => toggleComplete(row.employee.id, !row.entry.isComplete)}
+                  >
+                    {row.entry.isComplete ? "已确认，点击重新编辑" : row.validationIssues.length ? getPayrollIssueMessage(row.validationIssues[0]) : "确认该员工本月考勤"}
+                  </Button>
+                </div>
+              );
+            })}
+          </Space>
+        ) : (
+          <Table
+            columns={columns}
+            dataSource={rows}
+            rowKey={(row) => row.employee.id}
+            rowClassName={(row) => (row.entry.isComplete ? "row-status-confirmed" : "row-status-pending")}
+            pagination={false}
+            size="middle"
+            scroll={{ x: 960 }}
+          />
+        )}
       </Card>
 
       {/* 批量操作确认 Modal */}

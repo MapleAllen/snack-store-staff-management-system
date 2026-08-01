@@ -16,6 +16,8 @@ import {
   Descriptions,
   Typography,
   Divider,
+  Grid,
+  Steps,
 } from "antd";
 import {
   CheckCircleOutlined,
@@ -26,6 +28,8 @@ import {
   PlusOutlined,
   EditOutlined,
   CalculatorOutlined,
+  PrinterOutlined,
+  SendOutlined,
 } from "@ant-design/icons";
 
 import { StatCard } from "../components/StatCard.jsx";
@@ -37,7 +41,10 @@ import {
   getPayrollIssueMessage,
   getPayrollReviewStatus,
 } from "../payrollLogic.js";
-import { MONTHLY_PAYROLL_ADJUSTMENT_REASONS } from "../payrollData.js";
+import {
+  MONTHLY_PAYROLL_ADJUSTMENT_REASONS,
+  PAYOUT_METHODS,
+} from "../payrollData.js";
 
 const { Text } = Typography;
 
@@ -54,6 +61,18 @@ const DEFAULT_PAYROLL_ADJUSTMENT_DRAFT = {
   reason: MONTHLY_PAYROLL_ADJUSTMENT_REASONS[0],
   status: "pending",
 };
+
+const PAYMENT_STATUS_OPTIONS = [
+  { value: "pending", label: "待支付" },
+  { value: "paid", label: "已支付" },
+  { value: "failed", label: "支付失败" },
+];
+
+const PAYSLIP_STATUS_OPTIONS = [
+  { value: "not-delivered", label: "工资单待交付" },
+  { value: "delivered", label: "工资单已交付" },
+  { value: "acknowledged", label: "员工已确认" },
+];
 
 function makePayrollAdjustmentId() {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -86,11 +105,16 @@ export function PayrollPage({
   isLocked,
   onClosePayroll,
   onUnlockPayroll,
+  onCreatePayout,
+  onUpdatePayoutRow,
 }) {
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.xl;
   const [searchTerm, setSearchTerm] = useState("");
   const [viewFilter, setViewFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [formulaModalRow, setFormulaModalRow] = useState(null);
+  const [payoutModal, setPayoutModal] = useState(null);
 
   const [adjustmentFormVisible, setAdjustmentFormVisible] = useState(false);
   const [adjustmentDraft, setAdjustmentDraft] = useState(DEFAULT_PAYROLL_ADJUSTMENT_DRAFT);
@@ -130,6 +154,14 @@ export function PayrollPage({
   }, [selectedRow?.employee?.id, visiblePayrollRows]);
 
   const selectedAdjustments = getPayrollAdjustments(selectedRow?.entry);
+  const payout = monthlyStore?.payout ?? null;
+  const payoutRows = payrollViewRows.map((row) => ({ ...row, payout: payout?.rows?.[row.employee.id] ?? null }));
+  const paidCount = payoutRows.filter((row) => row.payout?.paymentStatus === "paid").length;
+  const deliveredCount = payoutRows.filter((row) => ["delivered", "acknowledged"].includes(row.payout?.payslipStatus)).length;
+  const workflowStep = !isClosed
+    ? pendingCount > 0 ? 0 : 1
+    : !payout ? 2
+      : payout.status !== "paid" || deliveredCount < payoutRows.length ? 3 : 4;
 
   function resetAdjustmentForm() {
     setAdjustmentDraft(DEFAULT_PAYROLL_ADJUSTMENT_DRAFT);
@@ -256,8 +288,9 @@ export function PayrollPage({
       width: 150,
       align: "right",
       render: (_, record) => {
-        const disabled = isClosed || (!record.entry.isComplete && record.closeBlockers.length > 0);
-        const blockerMsg = record.closeBlockers.length ? getPayrollIssueMessage(record.closeBlockers[0]) : "";
+        const confirmationIssues = record.validationIssues ?? [];
+        const disabled = isClosed || (!record.entry.isComplete && confirmationIssues.length > 0);
+        const blockerMsg = confirmationIssues.length ? getPayrollIssueMessage(confirmationIssues[0]) : "";
 
         const btn = record.entry.isComplete ? (
           <Button
@@ -277,18 +310,18 @@ export function PayrollPage({
           <Button
             type="default"
             size="small"
-            danger={record.closeBlockers.length > 0}
+            danger={confirmationIssues.length > 0}
             disabled={disabled}
             onClick={(e) => {
               e.stopPropagation();
               toggleEntryComplete(record.employee.id, true);
             }}
           >
-            {record.closeBlockers.length ? "有阻塞项" : "点此确认"}
+            {confirmationIssues.length ? "有输入错误" : "点此确认"}
           </Button>
         );
 
-        return record.closeBlockers.length && !record.entry.isComplete ? (
+        return confirmationIssues.length && !record.entry.isComplete ? (
           <Tooltip title={blockerMsg}>{btn}</Tooltip>
         ) : (
           btn
@@ -340,6 +373,21 @@ export function PayrollPage({
         }
       />
 
+      <Card size="small" className="workflow-steps">
+        <Steps
+          size="small"
+          current={workflowStep}
+          responsive={false}
+          items={[
+            { title: "考勤" },
+            { title: "复核" },
+            { title: "月结" },
+            { title: "发薪" },
+            { title: "完成" },
+          ]}
+        />
+      </Card>
+
       {/* 已月结封账冻结横幅 */}
       {isClosed && (
         <Alert
@@ -350,6 +398,68 @@ export function PayrollPage({
           description="当前工资表已冻结为不可修改状态。如需更正考勤或工资，请点击右上角“解锁本月工资”并填写解锁原因。"
         />
       )}
+
+      {isClosed ? (
+        <Card
+          className="payout-workspace"
+          title={<Space><SendOutlined /><Text strong>发薪与工资单交付</Text></Space>}
+          extra={
+            <Space wrap>
+              <Button icon={<PrinterOutlined />} onClick={() => window.print()}>打印全部工资单</Button>
+              {!payout ? (
+                <Button
+                  type="primary"
+                  onClick={() => setPayoutModal({
+                    plannedPayDate: `${activeMonth}-28`,
+                    method: PAYOUT_METHODS[0],
+                    reference: "",
+                  })}
+                >
+                  创建发薪批次
+                </Button>
+              ) : null}
+            </Space>
+          }
+        >
+          {!payout ? (
+            <Alert
+              showIcon
+              type="info"
+              message="工资已冻结，下一步是创建发薪批次"
+              description="设置计划发薪日和线下支付方式后，逐人记录支付结果与工资单交付状态。"
+            />
+          ) : (
+            <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+              <div className="payout-summary">
+                <div><Text type="secondary">批次状态</Text><Tag color={payout.status === "paid" ? "success" : payout.status === "in-progress" ? "processing" : "warning"}>{payout.status === "paid" ? "全部已支付" : payout.status === "in-progress" ? "发薪处理中" : "待开始发薪"}</Tag></div>
+                <div><Text type="secondary">计划发薪日</Text><strong>{payout.plannedPayDate}</strong></div>
+                <div><Text type="secondary">支付方式</Text><strong>{payout.method}</strong></div>
+                <div><Text type="secondary">交付进度</Text><strong>{paidCount}/{payoutRows.length} 已支付 · {deliveredCount}/{payoutRows.length} 已交工资单</strong></div>
+              </div>
+              {payout.reference ? <Text type="secondary">批次参考号：{payout.reference}</Text> : null}
+              <div className="payout-roster">
+                {payoutRows.map((row) => (
+                  <div className="payout-roster__row" key={row.employee.id}>
+                    <div className="payout-roster__employee"><Text strong>{row.employee.name}</Text><Text type="secondary">{formatCurrency(row.breakdown.netSalary)}</Text></div>
+                    <Select
+                      aria-label={`${row.employee.name} 支付状态`}
+                      value={row.payout?.paymentStatus ?? "pending"}
+                      options={PAYMENT_STATUS_OPTIONS}
+                      onChange={(paymentStatus) => onUpdatePayoutRow(row.employee.id, paymentStatus, row.payout?.payslipStatus ?? "not-delivered")}
+                    />
+                    <Select
+                      aria-label={`${row.employee.name} 工资单状态`}
+                      value={row.payout?.payslipStatus ?? "not-delivered"}
+                      options={PAYSLIP_STATUS_OPTIONS}
+                      onChange={(payslipStatus) => onUpdatePayoutRow(row.employee.id, row.payout?.paymentStatus ?? "pending", payslipStatus)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </Space>
+          )}
+        </Card>
+      ) : null}
 
       {/* 3 张精简指标卡 (代原 5 卡挤压) */}
       <Row gutter={[16, 16]}>
@@ -408,27 +518,59 @@ export function PayrollPage({
             }
             style={{ borderRadius: 8 }}
           >
-            <Table
-              columns={columns}
-              dataSource={visiblePayrollRows}
-              rowKey={(row) => row.employee.id}
-              pagination={{
-                current: currentPage,
-                pageSize: 10,
-                onChange: (page) => setCurrentPage(page),
-              }}
-              size="middle"
-              rowClassName={(row) =>
-                row.employee.id === selectedRow?.employee.id
-                  ? "row-status-selected"
-                  : row.entry.isComplete
-                  ? "row-status-confirmed"
-                  : "row-status-pending"
-              }
-              onRow={(record) => ({
-                onClick: () => setSelectedEmployeeId(record.employee.id),
-              })}
-            />
+            {isMobile ? (
+              <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+                {visiblePayrollRows.map((row) => {
+                  const confirmationIssues = row.validationIssues ?? [];
+                  const confirmationDisabled = isClosed || (!row.entry.isComplete && confirmationIssues.length > 0);
+                  return (
+                    <div
+                      key={row.employee.id}
+                      className={`mobile-record-card mobile-record-card--flat ${row.employee.id === selectedRow?.employee.id ? "mobile-record-card--selected" : ""}`}
+                      onClick={() => setSelectedEmployeeId(row.employee.id)}
+                    >
+                      <div className="mobile-record-heading">
+                        <div><Text strong>{row.employee.name}</Text><Text type="secondary">{row.reviewStatus.summary}</Text></div>
+                        <Tag color={row.reviewStatus.tone === "success" ? "success" : row.reviewStatus.tone === "danger" ? "error" : "warning"}>{row.reviewStatus.label}</Tag>
+                      </div>
+                      <div className="mobile-payroll-amount">
+                        <Text type="secondary">本月实发</Text>
+                        <strong>{row.employee.salaryConfigured ? formatCurrency(row.breakdown.netSalary) : "待设置薪资"}</strong>
+                      </div>
+                      <Space wrap size={[4, 4]}>
+                        {row.breakdown.overtimeHours > 0 ? <Tag color="blue">加班 {row.breakdown.overtimeHours}h</Tag> : null}
+                        {row.breakdown.leaveDays > 0 ? <Tag color="orange">请假 {row.breakdown.leaveDays}天</Tag> : null}
+                        {row.breakdown.specialAdjustment !== 0 ? <Tag color="purple">调整 {formatCurrency(row.breakdown.specialAdjustment)}</Tag> : null}
+                        {!row.breakdown.overtimeHours && !row.breakdown.leaveDays && !row.breakdown.specialAdjustment ? <Text type="secondary">考勤正常，无特殊调整</Text> : null}
+                      </Space>
+                      <Button
+                        block
+                        type={row.entry.isComplete ? "primary" : "default"}
+                        disabled={confirmationDisabled}
+                        danger={!row.entry.isComplete && confirmationIssues.length > 0}
+                        icon={row.entry.isComplete ? <CheckCircleOutlined /> : null}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleEntryComplete(row.employee.id, !row.entry.isComplete);
+                        }}
+                      >
+                        {row.entry.isComplete ? "已确认，点击重新核对" : confirmationIssues.length ? getPayrollIssueMessage(confirmationIssues[0]) : "确认该员工工资"}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </Space>
+            ) : (
+              <Table
+                columns={columns}
+                dataSource={visiblePayrollRows}
+                rowKey={(row) => row.employee.id}
+                pagination={{ current: currentPage, pageSize: 10, onChange: (page) => setCurrentPage(page) }}
+                size="middle"
+                rowClassName={(row) => row.employee.id === selectedRow?.employee.id ? "row-status-selected" : row.entry.isComplete ? "row-status-confirmed" : "row-status-pending"}
+                onRow={(record) => ({ onClick: () => setSelectedEmployeeId(record.employee.id) })}
+              />
+            )}
           </Card>
         </Col>
 
@@ -578,6 +720,47 @@ export function PayrollPage({
           </div>
         </Col>
       </Row>
+
+      {payoutModal ? (
+        <Modal title="创建发薪批次" open onCancel={() => setPayoutModal(null)} footer={null} width={480}>
+          <form
+            className="modal-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              try {
+                onCreatePayout(payoutModal);
+                setPayoutModal(null);
+              } catch {}
+            }}
+          >
+            <Alert type="info" showIcon message={`${activeStore.name} · ${activeMonth} · ${payrollRows.length} 位员工`} description={`冻结实发合计 ${formatCurrency(forecastNetSalary)}`} />
+            <label className="field"><span>计划发薪日期</span><Input type="date" required value={payoutModal.plannedPayDate} onChange={(event) => setPayoutModal((current) => ({ ...current, plannedPayDate: event.target.value }))} /></label>
+            <label className="field"><span>支付方式</span><Select value={payoutModal.method} options={PAYOUT_METHODS.map((method) => ({ value: method, label: method }))} onChange={(method) => setPayoutModal((current) => ({ ...current, method }))} /></label>
+            <label className="field"><span>批次参考号（选填）</span><Input maxLength={80} value={payoutModal.reference} onChange={(event) => setPayoutModal((current) => ({ ...current, reference: event.target.value }))} placeholder="例如银行批次号或线下凭证编号" /></label>
+            <div className="modal-actions"><Button onClick={() => setPayoutModal(null)}>取消</Button><Button type="primary" htmlType="submit">创建批次</Button></div>
+          </form>
+        </Modal>
+      ) : null}
+
+      {isClosed ? (
+        <section className="print-salary-slips" aria-hidden="true">
+          {payrollRows.map((row) => (
+            <article className="salary-slip" key={row.employee.id}>
+              <header><div><h1>门店工资助手 · 个人工资单</h1><p>{activeStore.name} · {activeMonth}</p></div><strong>{row.employee.name}</strong></header>
+              <div className="salary-slip__grid">
+                <span>基础工资</span><strong>{formatCurrency(row.employee.baseSalary)}</strong>
+                <span>加班与夜班补贴</span><strong>+{formatCurrency(row.breakdown.overtimePay + row.breakdown.nightShiftPay)}</strong>
+                <span>全勤、稽核与饭补</span><strong>+{formatCurrency(row.breakdown.attendancePay + row.breakdown.auditPay + row.breakdown.mealAllowance)}</strong>
+                <span>固定社保贡献</span><strong>+{formatCurrency(row.breakdown.socialInsurance)}</strong>
+                <span>请假扣减</span><strong>-{formatCurrency(row.breakdown.leaveDaysDeduction + row.breakdown.leaveHoursDeduction)}</strong>
+                <span>特殊调整</span><strong>{row.breakdown.specialAdjustment >= 0 ? "+" : ""}{formatCurrency(row.breakdown.specialAdjustment)}</strong>
+                <span className="salary-slip__total">本月实发</span><strong className="salary-slip__total">{formatCurrency(row.breakdown.netSalary)}</strong>
+              </div>
+              <footer>状态：正式 · 已月结　公式版本：{row.formulaMetadata?.version ?? "core-payroll-v1"}　打印时间：{new Date().toLocaleString("zh-CN")}</footer>
+            </article>
+          ))}
+        </section>
+      ) : null}
 
       {/* 算薪公式拆解 Modal */}
       {formulaModalRow && (

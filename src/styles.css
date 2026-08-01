@@ -369,6 +369,234 @@ textarea {
   padding: 4rem 1rem;
 }
 
+/* Mobile record layout keeps the desktop split workspace intact while
+   replacing wide operational tables with touch-friendly cards. */
+.mobile-record-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.mobile-record-card--flat {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.mobile-record-card--confirmed {
+  border-color: #b7eb8f;
+  background: #f6ffed;
+}
+
+.mobile-record-card--selected {
+  border-color: #1677ff;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.1);
+}
+
+.mobile-record-heading,
+.mobile-record-control,
+.mobile-record-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mobile-record-heading > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mobile-record-grid,
+.mobile-input-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mobile-record-grid > div,
+.mobile-input-grid label {
+  display: grid;
+  gap: 4px;
+}
+
+.mobile-record-grid strong,
+.mobile-payroll-amount strong {
+  display: block;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-input-grid label > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mobile-input-grid .ant-input-number {
+  width: 100%;
+}
+
+.mobile-record-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.mobile-payroll-amount {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mobile-payroll-amount strong {
+  color: #1677ff;
+  font-size: 20px;
+}
+
+.payout-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.payout-summary > div,
+.payout-roster__employee {
+  display: grid;
+  gap: 4px;
+}
+
+.payout-roster {
+  border-top: 1px solid #f0f0f0;
+}
+
+.payout-roster__row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) 150px 170px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.print-salary-slips {
+  display: none;
+}
+
+.salary-slip {
+  break-after: page;
+  padding: 8mm;
+  color: #111827;
+}
+
+.salary-slip header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 2px solid #111827;
+}
+
+.salary-slip h1,
+.salary-slip p {
+  margin: 0 0 6px;
+}
+
+.salary-slip__grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px 24px;
+  margin: 18px 0;
+}
+
+.salary-slip__grid strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.salary-slip__total {
+  padding-top: 12px;
+  border-top: 1px solid #111827;
+  font-size: 18px;
+}
+
+.salary-slip footer {
+  padding-top: 10px;
+  border-top: 1px solid #d1d5db;
+  color: #4b5563;
+  font-size: 12px;
+}
+
+@media (max-width: 767px) {
+  .page-header {
+    margin-bottom: 14px !important;
+  }
+
+  .page-header h2 {
+    font-size: 22px !important;
+  }
+
+  .page-header__actions {
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .page-header__actions > .ant-space,
+  .page-header__actions > .ant-btn,
+  .page-header__actions .ant-space-item {
+    width: 100%;
+  }
+
+  .page-header__actions .ant-btn {
+    min-height: 40px;
+  }
+
+  .sticky-panel {
+    position: static;
+  }
+
+  .ant-card .ant-card-body {
+    padding: 14px;
+  }
+
+  .ant-card .ant-card-head {
+    padding: 0 14px;
+  }
+
+  .ant-card-head-wrapper {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .ant-card-extra {
+    margin-inline-start: 0;
+  }
+
+  .modal-actions {
+    position: sticky;
+    bottom: 0;
+    padding: 10px 0 max(10px, env(safe-area-inset-bottom));
+    background: #fff;
+  }
+
+  .payout-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .payout-roster__row {
+    grid-template-columns: 1fr;
+    padding: 14px 0;
+  }
+
+  .workflow-steps .ant-steps-item-title {
+    white-space: nowrap;
+    font-size: 12px;
+  }
+}
+
 /* Print Rules for Salary Slips */
 @media print {
   body * {
@@ -380,6 +608,7 @@ textarea {
   }
   
   .print-salary-slips {
+    display: block;
     position: absolute;
     left: 0;
     top: 0;
