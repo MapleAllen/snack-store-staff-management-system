@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createInitialWorkspace, migrateWorkspace } from "./payrollData.js";
+import { createInitialWorkspace, migrateWorkspace, WORKSPACE_VERSION } from "./payrollData.js";
 import { PAYROLL_FORMULA_METADATA, createPayrollIssue, getAssignmentAtMonth, getMonthlyStoreRecord, getStorePayrollRows } from "./payrollLogic.js";
 import {
   archiveStore,
@@ -24,7 +24,7 @@ describe("workspace migration", () => {
       monthlyRecords: { "2026-06": { erz: { rows: { "legacy-1": { isComplete: true } }, savedAt: null } } },
     };
     const migrated = migrateWorkspace(legacy);
-    expect(migrated.version).toBe(3);
+    expect(migrated.version).toBe(WORKSPACE_VERSION);
     expect(migrated.stores).toHaveLength(1);
     expect(migrated.stores.find((store) => store.id === "erz")?.name).toBe("旧门店名");
     expect(migrated.employees.some((employee) => employee.id === "legacy-1")).toBe(true);
