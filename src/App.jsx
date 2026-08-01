@@ -194,6 +194,8 @@ export function App() {
   const [autoBackupBusy, setAutoBackupBusy] = useState(false);
   const [recoveryPassphrase, setRecoveryPassphrase] = useState("");
   const [recoveryFile, setRecoveryFile] = useState(null);
+  const [updateInfo, setUpdateInfo] = useState(null);
+  const [updateDismissed, setUpdateDismissed] = useState(false);
   const desktopApi = window.payrollDesktop;
 
   useEffect(() => {
@@ -255,6 +257,15 @@ export function App() {
       .then(() => desktopApi.listBackups())
       .then((backups) => { if (!cancelled) setAutoBackups(backups); })
       .catch(() => { if (!cancelled) setNotice("自动恢复点创建失败，请导出手动备份"); });
+    return () => { cancelled = true; };
+  }, [desktopApi, loadedWorkspace]);
+
+  useEffect(() => {
+    if (!desktopApi || !loadedWorkspace) return;
+    let cancelled = false;
+    desktopApi.checkForUpdates()
+      .then((result) => { if (!cancelled && result?.updateAvailable) setUpdateInfo(result); })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, [desktopApi, loadedWorkspace]);
 
@@ -1374,6 +1385,26 @@ export function App() {
           </Header>
 
           <Content style={{ padding: isMobile ? "16px 12px 32px" : "24px 32px", maxWidth: 1400, margin: "0 auto", width: "100%", minWidth: 0 }}>
+            {updateInfo && !updateDismissed ? (
+              <Alert
+                type="info"
+                showIcon
+                closable
+                onClose={() => setUpdateDismissed(true)}
+                style={{ marginBottom: 16 }}
+                message={`发现新版本 v${updateInfo.latestVersion}`}
+                description={`当前版本 v${updateInfo.currentVersion}。点击"下载更新"获取安装包，安装前请先关闭本应用。`}
+                action={
+                  <Button
+                    size="small"
+                    type="primary"
+                    onClick={() => desktopApi.openUpdateDownload(updateInfo.assetUrl).then(() => setUpdateDismissed(true))}
+                  >
+                    下载更新
+                  </Button>
+                }
+              />
+            ) : null}
             <Suspense fallback={<div style={{ minHeight: 280, display: "grid", placeItems: "center", color: "#595959" }}>正在加载工作区…</div>}>
             {activePage === "home" ? <HomePage workspace={workspace} activeMonth={activeMonth} onNavigate={setActivePage} onSelectStore={setActiveStoreId} onSelectEmployee={setSelectedEmployeeId} openAdjustmentModal={openAdjustmentModal} onNavigateToEmployee={handleNavigateToEmployee} /> : null}
             {activePage === "employees" ? <EmployeesPage workspace={workspace} store={activeStore} currentMonth={currentMonth} onCreate={() => setEmployeeModal({ mode: "create", draft: createEmployeeDraft() })} onEditProfile={(employee) => setEmployeeModal({ mode: "edit", employeeId: employee.id, name: employee.name, phone: employee.phone ?? "", employeeNumber: employee.employeeNumber ?? "", role: employee.role ?? "", hireDate: employee.hireDate ?? "" })} onToggleResignation={handleToggleResignation} onTransfer={openTransferModal} /> : null}

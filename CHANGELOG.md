@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Replaced anonymous member codes with real employee profiles: name, phone, employee number, role, and hire date, with editable profiles and audited changes.
+- Added a desktop startup check against GitHub Releases that prompts the user to download the installer when a newer version exists; no silent install and no business data leaves the machine.
 - Fixed the per-employee confirmation path so an unconfirmed row can be confirmed from payroll instead of disabling its own action.
 - Grouped owner dashboard blockers by store and corrected confirmation denominators.
 - Restored responsive drawer navigation and mobile card layouts while preserving the desktop payroll split workspace.
