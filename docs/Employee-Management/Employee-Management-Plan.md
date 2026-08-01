@@ -11,7 +11,7 @@ Evolve employee management from a lightweight payroll roster into a commercial s
 - Salary component changes require adjustment records.
 - Employee onboarding is not complete until initial salary is configured.
 - Assignment changes are month-based and must not rewrite closed payroll history.
-- Member records use generated anonymous codes and must not collect personal-identifying profile fields.
+- Employee profiles store real names and contact details locally (name, phone, employee number, role, hire date) and must not collect identity documents, addresses, or bank data.
 
 ## Phase 1: Current Payroll Roster — DONE
 
@@ -29,20 +29,25 @@ Completed work:
 - Resigned employees remain in history and are excluded from active payroll rows.
 - Month-based transfer preserves employee identity and assignment history.
 
-## Phase 2: Commercial Employee Profiles — NOT STARTED
+## Phase 2: Commercial Employee Profiles — DONE
 
-Status: **Not Started**
+Status: **Done**
 
 Goals:
 
-- Improve operational member administration while preserving the no-personal-information boundary.
+- Support real employee profile administration with validated local identity fields.
+
+Completed work:
+
+- Employee records store name, phone, employee number, role, and hire date.
+- `updateEmployeeProfile()` validates required name, phone format, and employee-number uniqueness.
+- Profile edits are recorded as `employee-profile-updated` audit events.
+- Migration preserves real names and normalizes new profile fields.
+- Payroll exports carry name, employee number, role, and phone columns.
 
 Remaining features:
 
-- Keep only generated member code, payroll status, salary-component state, assignment, and employment lifecycle data.
-- Add controlled, non-identifying operational classifications only where they affect payroll or scheduling.
-- Reject or remove legacy names, contact details, bank data, document status, and free-text member notes during migration.
-- Add migration coverage proving all existing members receive stable anonymous codes.
+- Add migration coverage proving all existing members keep stable identities.
 
 ## Phase 3: Employment Lifecycle — NOT STARTED
 
@@ -83,10 +88,9 @@ Goals:
 
 Remaining features:
 
-- Add anonymous member-code import with preview and error report.
-- Add roster export using anonymous member codes for active and historical members.
+- Add roster import with preview and error report.
+- Add roster export for active and historical members.
 - Add import rollback before save.
-- Reject mappings for names, contact details, IDs, bank data, and other personal fields.
 
 ## Phase 6: Employee Timeline and Audit — NOT STARTED
 
@@ -118,7 +122,7 @@ Remaining features:
 
 - Add tests for resignation exclusion from payroll rows and reports.
 - Add tests for salary-pending onboarding flow.
-- Add tests proving legacy personal fields are removed during migration.
+- Add tests proving migration preserves employee names and normalizes profile fields.
 - Add tests for bulk import validation once implemented.
 
 ## Implementation Rules
@@ -126,8 +130,8 @@ Remaining features:
 - Do not delete employees to remove them from payroll; use lifecycle state.
 - Do not include resigned employees in active payroll, reports, exports, or completion rates unless explicitly viewing history.
 - Do not change salary fields without appending an adjustment record.
-- Do not create real-person demo data in templates or docs.
-- Do not collect member names, contact details, identity documents, bank data, or free-text personal notes.
+- Do not create real-person demo data in templates or docs; use clearly fictional names.
+- Do not collect identity documents, bank data, or free-text personal notes beyond the defined profile fields.
 - Do not make new operational fields mandatory without safe migration defaults.
 
 ## Open Questions

@@ -1,7 +1,8 @@
 export const OPERATION_TYPES = new Set([
   "store-created", "store-renamed", "store-archived", "store-restored",
   "salary-adjusted", "employee-resigned", "employee-restored", "rule-updated",
-  "employee-transferred", "payroll-closed", "payroll-unlocked",
+  "employee-transferred", "employee-profile-updated",
+  "payroll-closed", "payroll-unlocked",
   "payout-created", "payout-row-updated",
 ]);
 

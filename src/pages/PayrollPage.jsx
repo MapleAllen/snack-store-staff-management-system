@@ -134,7 +134,9 @@ export function PayrollPage({
   const canClose = blockerRows.length === 0;
 
   const visiblePayrollRows = useMemo(() => payrollViewRows.filter((row) => {
-    if (searchTerm && !row.employee.name.includes(searchTerm.trim()) && !row.employee.id.includes(searchTerm.trim())) {
+    const keyword = searchTerm.trim().toLowerCase();
+    if (keyword && !row.employee.name.toLowerCase().includes(keyword) && !row.employee.id.toLowerCase().includes(keyword)
+      && !`${row.employee.employeeNumber ?? ""}`.toLowerCase().includes(keyword) && !`${row.employee.phone ?? ""}`.includes(keyword)) {
       return false;
     }
     if (viewFilter === "pending") return !row.entry.isComplete;
@@ -215,7 +217,7 @@ export function PayrollPage({
 
   const columns = [
     {
-      title: "成员代号与状态",
+      title: "姓名与状态",
       dataIndex: ["employee", "name"],
       key: "name",
       width: 160,
@@ -497,7 +499,7 @@ export function PayrollPage({
             extra={
               <Space wrap>
                 <Input
-                  placeholder="搜索成员代号或系统编号"
+                  placeholder="搜索姓名、工号或手机号"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   style={{ width: 150 }}

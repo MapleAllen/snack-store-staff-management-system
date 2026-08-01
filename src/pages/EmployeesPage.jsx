@@ -7,13 +7,14 @@ import {
   UserAddOutlined,
   SearchOutlined,
   HistoryOutlined,
+  EditOutlined,
 } from "@ant-design/icons";
 import { PageHeader } from "../components/PageHeader.jsx";
 import { formatCurrency, getAssignmentAtMonth, getEmployeeAssignments, getEmployeesWithStoreHistory } from "../payrollLogic.js";
 
 const { Text, Title, Paragraph } = Typography;
 
-export function EmployeesPage({ workspace, store, currentMonth, onCreate, onToggleResignation, onTransfer }) {
+export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEditProfile, onToggleResignation, onTransfer }) {
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
   const [searchTerm, setSearchTerm] = useState("");
@@ -40,7 +41,9 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onTogg
   const historyCount = cards.filter((c) => c.employee.isResigned || !c.currentHere).length;
 
   const visibleCards = cards.filter(({ employee, currentHere }) => {
-    if (searchTerm.trim() && !employee.name.includes(searchTerm.trim()) && !employee.id.includes(searchTerm.trim())) {
+    const keyword = searchTerm.trim().toLowerCase();
+    if (keyword && !employee.name.toLowerCase().includes(keyword) && !employee.id.toLowerCase().includes(keyword)
+      && !`${employee.employeeNumber ?? ""}`.toLowerCase().includes(keyword) && !`${employee.phone ?? ""}`.includes(keyword)) {
       return false;
     }
     if (statusFilter === "active") return currentHere && !employee.isResigned;
@@ -51,7 +54,7 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onTogg
 
   const columns = [
     {
-      title: "成员代号",
+      title: "姓名",
       dataIndex: ["employee", "name"],
       key: "name",
       render: (_, record) => (
@@ -64,9 +67,27 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onTogg
           </Avatar>
           <div>
             <Text strong>{record.employee.name}</Text>
-            <Text type="secondary" style={{ display: "block", fontSize: 12 }}>系统编号：{record.employee.id.slice(-8)}</Text>
+            <Text type="secondary" style={{ display: "block", fontSize: 12 }}>{record.employee.employeeNumber ? `工号 ${record.employee.employeeNumber}` : `系统编号 ${record.employee.id.slice(-8)}`}</Text>
           </div>
         </Space>
+      ),
+    },
+    {
+      title: "手机号",
+      key: "phone",
+      render: (_, record) => record.employee.phone ? (
+        <Text className="tabular-nums">{record.employee.phone}</Text>
+      ) : (
+        <Text type="secondary">—</Text>
+      ),
+    },
+    {
+      title: "岗位",
+      key: "role",
+      render: (_, record) => record.employee.role ? (
+        <Tag color="geekblue">{record.employee.role}</Tag>
+      ) : (
+        <Text type="secondary">—</Text>
       ),
     },
     {
@@ -133,7 +154,10 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onTogg
         return (
           <Space wrap size="small">
             <Button size="small" icon={<HistoryOutlined />} onClick={() => setHistoryDrawerEmployee(employee)}>
-              代号与履历
+              资料与履历
+            </Button>
+            <Button size="small" icon={<EditOutlined />} onClick={() => onEditProfile(employee)}>
+              编辑资料
             </Button>
             {currentHere && !employee.isResigned && (
               <Button size="small" icon={<SwapOutlined />} onClick={() => onTransfer(employee)}>
@@ -176,7 +200,7 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onTogg
       <PageHeader
         eyebrow="成员与工资"
         title={`${store.name} 岗位成员`}
-        description="使用系统生成的匿名成员代号管理工资、调店和在职状态；本页不保存姓名或联系方式。"
+        description="管理员工的姓名、联系方式、岗位、工资与在职状态；调薪和在职变更均保留可追溯记录。"
         actions={
           <Button type="primary" size="large" icon={<PlusOutlined />} onClick={onCreate}>
             新增岗位成员
@@ -202,7 +226,7 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onTogg
           </Col>
           <Col xs={24} md="auto">
             <Input
-              placeholder="搜索成员代号或系统编号"
+              placeholder="搜索姓名、工号或手机号"
               prefix={<SearchOutlined />}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -228,11 +252,16 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onTogg
                 <div><Text type="secondary">基础工资</Text><strong>{employee.salaryConfigured ? formatCurrency(employee.baseSalary) : "待设置"}</strong></div>
                 <div><Text type="secondary">全勤奖金</Text><strong>{employee.salaryConfigured ? formatCurrency(employee.attendanceBonus) : "—"}</strong></div>
               </div>
+              <div className="mobile-record-grid">
+                <div><Text type="secondary">手机号</Text><strong>{employee.phone || "—"}</strong></div>
+                <div><Text type="secondary">岗位</Text><strong>{employee.role || "—"}</strong></div>
+              </div>
               {plannedOut ? <Text type="warning">{plannedOut.startMonth} 调往 {storeMap.get(plannedOut.storeId)?.name}</Text> : null}
               {plannedIn ? <Text type="success">{plannedIn.startMonth} 调入本店</Text> : null}
               {!currentHere && currentAssignment ? <Text type="secondary">当前归属：{storeMap.get(currentAssignment.storeId)?.name}</Text> : null}
               <div className="mobile-record-actions">
                 <Button size="small" icon={<HistoryOutlined />} onClick={() => setHistoryDrawerEmployee(employee)}>查看履历</Button>
+                <Button size="small" icon={<EditOutlined />} onClick={() => onEditProfile(employee)}>编辑资料</Button>
                 {currentHere && !employee.isResigned ? <Button size="small" icon={<SwapOutlined />} onClick={() => onTransfer(employee)}>调店</Button> : null}
                 {currentHere ? (
                   <Popconfirm
@@ -256,9 +285,9 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onTogg
         </Card>
       )}
 
-      {/* 匿名成员履历 Drawer */}
+      {/* 员工资料与履历 Drawer */}
       <Drawer
-        title={historyDrawerEmployee ? `${historyDrawerEmployee.name} - 岗位履历` : "成员履历"}
+        title={historyDrawerEmployee ? `${historyDrawerEmployee.name} - 岗位履历` : "员工履历"}
         placement="right"
         width={500}
         onClose={() => setHistoryDrawerEmployee(null)}
@@ -266,17 +295,24 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onTogg
       >
         {historyDrawerEmployee && (
           <Space direction="vertical" size="large" style={{ width: "100%" }}>
-            <Descriptions title="基本薪资组件" column={1} bordered size="small">
-              <Descriptions.Item label="成员代号">{historyDrawerEmployee.name}</Descriptions.Item>
+            <Descriptions title="员工资料" column={1} bordered size="small">
+              <Descriptions.Item label="姓名">{historyDrawerEmployee.name}</Descriptions.Item>
+              <Descriptions.Item label="手机号">{historyDrawerEmployee.phone || "—"}</Descriptions.Item>
+              <Descriptions.Item label="员工工号">{historyDrawerEmployee.employeeNumber || "—"}</Descriptions.Item>
+              <Descriptions.Item label="岗位">{historyDrawerEmployee.role || "—"}</Descriptions.Item>
+              <Descriptions.Item label="入职日期">{historyDrawerEmployee.hireDate || "—"}</Descriptions.Item>
               <Descriptions.Item label="系统编号">{historyDrawerEmployee.id.slice(-8)}</Descriptions.Item>
-              <Descriptions.Item label="基础工资">{formatCurrency(historyDrawerEmployee.baseSalary)}</Descriptions.Item>
-              <Descriptions.Item label="加班时薪">{historyDrawerEmployee.overtimeRate} 元/小时</Descriptions.Item>
-              <Descriptions.Item label="全勤奖金">{formatCurrency(historyDrawerEmployee.attendanceBonus)}</Descriptions.Item>
               <Descriptions.Item label="在职状态">
                 <Tag color={historyDrawerEmployee.isResigned ? "error" : "success"}>
                   {historyDrawerEmployee.isResigned ? `已离职 (${historyDrawerEmployee.resignationDate})` : "在职"}
                 </Tag>
               </Descriptions.Item>
+            </Descriptions>
+
+            <Descriptions title="基本薪资组件" column={1} bordered size="small">
+              <Descriptions.Item label="基础工资">{formatCurrency(historyDrawerEmployee.baseSalary)}</Descriptions.Item>
+              <Descriptions.Item label="加班时薪">{historyDrawerEmployee.overtimeRate} 元/小时</Descriptions.Item>
+              <Descriptions.Item label="全勤奖金">{formatCurrency(historyDrawerEmployee.attendanceBonus)}</Descriptions.Item>
             </Descriptions>
 
             <div>

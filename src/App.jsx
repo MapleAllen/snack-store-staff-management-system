@@ -1,7 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   createDefaultMonthValue,
-  createAnonymousMemberCode,
   createInitialWorkspace,
   createOpenMonthlyStoreRecord,
   defaultMonthlyEntry,
@@ -39,6 +38,7 @@ import {
   restoreEmployee,
   restoreStore as restoreStoreOperation,
   transferEmployee,
+  updateEmployeeProfile,
   updateStoreConfig,
   updatePayoutRow,
   unlockStoreMonth,
@@ -643,9 +643,23 @@ export function App() {
     event.preventDefault();
     if (!activeStore) return setNotice("当前没有可用门店");
     if (employeeModal.mode === "create") {
+      const name = `${employeeModal.name ?? ""}`.trim();
+      if (!name) return setNotice("请填写员工姓名");
+      if (name.length > 40) return setNotice("员工姓名过长");
+      const phone = `${employeeModal.phone ?? ""}`.trim();
+      if (phone && !/^1[3-9]\d{9}$/.test(phone)) return setNotice("手机号格式无效");
+      const employeeNumber = `${employeeModal.employeeNumber ?? ""}`.trim();
+      if (employeeNumber && workspace.employees.some((item) => `${item.employeeNumber ?? ""}`.toLowerCase() === employeeNumber.toLowerCase())) {
+        return setNotice("员工工号不能重复");
+      }
+      const role = `${employeeModal.role ?? ""}`.trim();
+      if (role.length > 20) return setNotice("岗位名称过长");
+      const hireDate = /^\d{4}-\d{2}-\d{2}$/.test(`${employeeModal.hireDate ?? ""}`) ? employeeModal.hireDate : null;
       const employeeId = makeId("employee");
       const employee = {
-        id: employeeId, name: createAnonymousMemberCode(workspace.employees.length + 1), baseSalary: 0, overtimeRate: 0, attendanceBonus: 0, salaryConfigured: false,
+        id: employeeId, name, phone, employeeNumber, role, hireDate,
+        baseSalary: 0, overtimeRate: 0, attendanceBonus: 0, salaryConfigured: false,
+        isResigned: false, resignationDate: null,
       };
       setWorkspace((current) => ({
         ...current,
@@ -659,9 +673,26 @@ export function App() {
       setAdjustmentModal({ mode: "initial", draft: createAdjustmentDraft(employee) });
       setActiveMonth(currentMonth);
       setActivePage("payroll");
-      setNotice("岗位成员已新增，请设置初始薪资");
+      setNotice("员工已新增，请设置初始薪资");
     } else {
-      setNotice("成员代号由系统生成，不支持修改");
+      const target = (workspace.employees ?? []).find((item) => item.id === employeeModal.employeeId);
+      if (!target) return setNotice("未找到员工记录");
+      try {
+        setWorkspace(updateEmployeeProfile(workspace, {
+          employeeId: target.id,
+          name: employeeModal.name,
+          phone: employeeModal.phone,
+          employeeNumber: employeeModal.employeeNumber,
+          role: employeeModal.role,
+          hireDate: employeeModal.hireDate,
+          id: makeId("profile"),
+          at: new Date().toISOString(),
+        }));
+      } catch (error) {
+        setNotice(error.message);
+        return;
+      }
+      setNotice("员工资料已更新");
     }
     setEmployeeModal(null);
   }
@@ -1345,7 +1376,7 @@ export function App() {
           <Content style={{ padding: isMobile ? "16px 12px 32px" : "24px 32px", maxWidth: 1400, margin: "0 auto", width: "100%", minWidth: 0 }}>
             <Suspense fallback={<div style={{ minHeight: 280, display: "grid", placeItems: "center", color: "#595959" }}>正在加载工作区…</div>}>
             {activePage === "home" ? <HomePage workspace={workspace} activeMonth={activeMonth} onNavigate={setActivePage} onSelectStore={setActiveStoreId} onSelectEmployee={setSelectedEmployeeId} openAdjustmentModal={openAdjustmentModal} onNavigateToEmployee={handleNavigateToEmployee} /> : null}
-            {activePage === "employees" ? <EmployeesPage workspace={workspace} store={activeStore} currentMonth={currentMonth} onCreate={() => setEmployeeModal({ mode: "create", draft: createEmployeeDraft() })} onToggleResignation={handleToggleResignation} onTransfer={openTransferModal} /> : null}
+            {activePage === "employees" ? <EmployeesPage workspace={workspace} store={activeStore} currentMonth={currentMonth} onCreate={() => setEmployeeModal({ mode: "create", draft: createEmployeeDraft() })} onEditProfile={(employee) => setEmployeeModal({ mode: "edit", employeeId: employee.id, name: employee.name, phone: employee.phone ?? "", employeeNumber: employee.employeeNumber ?? "", role: employee.role ?? "", hireDate: employee.hireDate ?? "" })} onToggleResignation={handleToggleResignation} onTransfer={openTransferModal} /> : null}
             {activePage === "attendance" ? <AttendancePage store={activeStore} activeMonth={activeMonth} rows={payrollRows} patchEntry={patchMonthlyEntry} toggleComplete={toggleEntryComplete} isLocked={isLocked} onNavigate={setActivePage} /> : null}
             {activePage === "reports" ? <ReportsPage workspace={workspace} activeMonth={activeMonth} setActiveMonth={setActiveMonth} onSelectStore={setActiveStoreId} onNavigate={setActivePage} /> : null}
             {activePage === "settings" ? <SettingsPage store={activeStoreView} stores={workspace.stores} patchConfig={patchStoreConfig} onExportBackup={exportWorkspaceBackup} onImportBackup={prepareWorkspaceRestore} onCreateStore={() => setStoreModal({ mode: "create", name: "" })} onEditStore={(store) => setStoreModal({ mode: "edit", storeId: store.id, name: store.name })} onArchiveStore={requestArchiveStore} onRestoreStore={restoreStore} autoBackups={autoBackups} autoBackupAvailable={Boolean(desktopApi)} autoBackupBusy={autoBackupBusy} onCreateAutoBackup={() => createAutomaticBackup(BACKUP_REASONS.MANUAL)} onRestoreAutoBackup={prepareAutomaticRestore} onRequestLock={() => setAppLocked(true)} onResetDemoWorkspace={() => setDemoResetModal(true)} ruleHistory={(workspace.ruleHistory ?? []).filter((record) => record.storeId === activeStore.id)} operationLog={workspace.operationLog ?? []} /> : null}
@@ -1362,7 +1393,7 @@ export function App() {
 
       {archiveStoreModal ? <Modal title="停用门店" onClose={() => setArchiveStoreModal(null)}><div className="modal-form"><div className="modal-summary"><strong>{archiveStoreModal.name}</strong><span>停用后将从日常录入中隐藏，历史工资仍可在报表中查看。</span></div><div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setArchiveStoreModal(null)}>取消</button><button className="danger-button" type="button" onClick={confirmArchiveStore}>确认停用</button></div></div></Modal> : null}
 
-      {employeeModal ? <Modal title="新增岗位成员" onClose={() => setEmployeeModal(null)}><form className="modal-form" onSubmit={submitEmployee}><div className="modal-summary"><strong>系统会自动生成匿名成员代号</strong><span>不会收集姓名、电话、证件、住址、银行卡或其他个人身份信息。</span></div><p className="modal-copy">基础工资、加班时薪和全勤奖金只能在工资管理的调薪记录中修改。</p><ModalActions onCancel={() => setEmployeeModal(null)} label="新增并设置薪资" /></form></Modal> : null}
+      {employeeModal ? <Modal title={employeeModal.mode === "edit" ? "编辑员工资料" : "新增员工"} onClose={() => setEmployeeModal(null)}><form className="modal-form" onSubmit={submitEmployee}><div className="modal-summary"><strong>{employeeModal.mode === "edit" ? "修改姓名、联系方式与岗位信息" : "录入员工真实信息"}</strong><span>姓名必填，其余字段可留空，后续可在员工管理中随时修改。</span></div><label className="field"><span>姓名 *</span><input autoFocus maxLength="40" value={employeeModal.name ?? ""} onChange={(event) => setEmployeeModal((current) => ({ ...current, name: event.target.value }))} placeholder="例如：张三" /></label><label className="field"><span>手机号</span><input maxLength="11" value={employeeModal.phone ?? ""} onChange={(event) => setEmployeeModal((current) => ({ ...current, phone: event.target.value }))} placeholder="例如：13800000000" /></label><label className="field"><span>员工工号</span><input maxLength="20" value={employeeModal.employeeNumber ?? ""} onChange={(event) => setEmployeeModal((current) => ({ ...current, employeeNumber: event.target.value }))} placeholder="例如：EMP-001" /></label><label className="field"><span>岗位</span><input maxLength="20" value={employeeModal.role ?? ""} onChange={(event) => setEmployeeModal((current) => ({ ...current, role: event.target.value }))} placeholder="例如：店长 / 收银 / 店员" /></label><label className="field"><span>入职日期</span><input type="date" value={employeeModal.hireDate ?? ""} onChange={(event) => setEmployeeModal((current) => ({ ...current, hireDate: event.target.value }))} /></label>{employeeModal.mode === "edit" ? null : <p className="modal-copy">基础工资、加班时薪和全勤奖金只能在工资管理的调薪记录中修改。</p>}<ModalActions onCancel={() => setEmployeeModal(null)} label={employeeModal.mode === "edit" ? "保存资料" : "新增并设置薪资"} /></form></Modal> : null}
 
       {adjustmentModal ? <Modal title={adjustmentModal.mode === "initial" ? "设置初始薪资" : "新增调薪记录"} width={700} onClose={() => setAdjustmentModal(null)}><form className="modal-form modal-form--wide" onSubmit={submitAdjustment}><label className="field"><span>员工</span><select value={adjustmentModal.draft.employeeId} onChange={(event) => { const employee = activeEmployees.find((item) => item.id === event.target.value); setAdjustmentModal((current) => ({ ...current, mode: employee?.salaryConfigured ? "adjustment" : "initial", draft: { ...createAdjustmentDraft(employee), date: current.draft.date, reason: current.draft.reason } })); }}>{activeEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></label><label className="field"><span>调整日期</span><input type="date" value={adjustmentModal.draft.date} onChange={(event) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, date: event.target.value } }))} /></label><div className="adjustment-grid"><div className="adjustment-grid__head">当前值</div><div className="adjustment-grid__head">调整后</div>{EMPLOYEE_FIELDS.map((field) => { const employee = activeEmployees.find((item) => item.id === adjustmentModal.draft.employeeId); const old = employee?.[field.key] ?? 0; return <div className="adjustment-row" key={field.key}><div className="adjustment-row__old"><span>{field.label}</span><strong>{field.key === "overtimeRate" ? `${old} / 小时` : formatCurrency(old)}</strong></div><label className="field adjustment-row__new"><span>{field.label}</span><input type="number" min={field.key === "baseSalary" ? "0.01" : "0"} step={field.step} value={adjustmentModal.draft.values?.[field.key] ?? ""} onChange={(event) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, values: { ...current.draft.values, [field.key]: event.target.value } } }))} /></label></div>; })}</div><label className="field"><span>业务原因</span><select value={adjustmentModal.draft.reason} onChange={(event) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, reason: event.target.value } }))}>{PAYROLL_ADJUSTMENT_REASONS.map((reason) => <option key={reason} value={reason}>{reason}</option>)}</select></label><ModalActions onCancel={() => setAdjustmentModal(null)} label={adjustmentModal.mode === "initial" ? "确认初始薪资" : "保存记录"} /></form></Modal> : null}
 
