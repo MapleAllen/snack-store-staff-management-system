@@ -40,8 +40,8 @@ Backup support spans `shared/backup-format.js`, `electron/backup-store.cjs`, Ele
 - `create(payload, reason)` validates the plaintext payload, validates the reason, writes via temp file plus rename, and applies retention.
 - Daily startup backups are deduplicated to one `daily-startup` recovery point per calendar day.
 - Retention keeps the newest `maxBackups` files, defaulting to 10.
-- `list()` returns valid backup files sorted newest first with ID, creation time, reason, label, and size.
-- Damaged backup files are excluded from `list()` and fail explicitly if read by ID.
+- `list()` returns recovery-point metadata sorted newest first, including damaged files with an explicit error state.
+- Damaged backup files remain visible in Settings for diagnosis, are marked non-recoverable, and still fail explicitly if read by ID.
 - `read(id)` validates backup IDs with a conservative filename regex before reading.
 - Create operations are serialized through a promise queue.
 
@@ -118,7 +118,6 @@ Backup-System uses a shared envelope and validation module, a desktop main-proce
 - Automatic recovery points are plaintext JSON on disk.
 - Canonical desktop workspace saves use the backup envelope but do not include checksums.
 - Protected manual backups are encrypted, but automatic recovery points are not.
-- Damaged automatic backups are hidden from the list rather than shown with an error state.
 - Retention is fixed by code (`maxBackups`, default 10) and not user-configurable.
 - Protected backup passphrases are not recoverable, remembered, or strength-scored.
 - Backup comparison, restore preview diff, and metadata export are not implemented.

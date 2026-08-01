@@ -11,7 +11,7 @@ Evolve employee management from a lightweight payroll roster into a commercial s
 - Salary component changes require adjustment records.
 - Employee onboarding is not complete until initial salary is configured.
 - Assignment changes are month-based and must not rewrite closed payroll history.
-- Commercial profile fields must migrate safely from existing minimal records.
+- Member records use generated anonymous codes and must not collect personal-identifying profile fields.
 
 ## Phase 1: Current Payroll Roster — DONE
 
@@ -35,14 +35,14 @@ Status: **Not Started**
 
 Goals:
 
-- Add practical staff administration fields while keeping payroll data local.
+- Improve operational member administration while preserving the no-personal-information boundary.
 
 Remaining features:
 
-- Add staff number, role, hire date, phone/contact, emergency contact, bank account note, and employee note fields.
-- Add document checklist fields for contract, ID verification, and payroll authorization without storing document files initially.
-- Add duplicate staff-number validation and duplicate-name warning.
-- Add migration defaults for all existing employees.
+- Keep only generated member code, payroll status, salary-component state, assignment, and employment lifecycle data.
+- Add controlled, non-identifying operational classifications only where they affect payroll or scheduling.
+- Reject or remove legacy names, contact details, bank data, document status, and free-text member notes during migration.
+- Add migration coverage proving all existing members receive stable anonymous codes.
 
 ## Phase 3: Employment Lifecycle — NOT STARTED
 
@@ -69,7 +69,7 @@ Goals:
 
 Remaining features:
 
-- Add `createEmployee()`, `renameEmployee()`, `recordSalaryAdjustment()`, `resignEmployee()`, and `restoreEmployee()` operations.
+- Add `createEmployee()`, `recordSalaryAdjustment()`, `resignEmployee()`, and `restoreEmployee()` operations.
 - Add validation and preview results for each operation.
 - Add tests for onboarding, salary-pending state, salary adjustment history, resignation, restore, and transfer interactions.
 
@@ -83,10 +83,10 @@ Goals:
 
 Remaining features:
 
-- Add CSV roster import with preview and error report.
-- Add roster export for active and historical employees.
+- Add anonymous member-code import with preview and error report.
+- Add roster export using anonymous member codes for active and historical members.
 - Add import rollback before save.
-- Add field mapping for common Chinese column labels.
+- Reject mappings for names, contact details, IDs, bank data, and other personal fields.
 
 ## Phase 6: Employee Timeline and Audit — NOT STARTED
 
@@ -118,7 +118,7 @@ Remaining features:
 
 - Add tests for resignation exclusion from payroll rows and reports.
 - Add tests for salary-pending onboarding flow.
-- Add tests for employee profile migration.
+- Add tests proving legacy personal fields are removed during migration.
 - Add tests for bulk import validation once implemented.
 
 ## Implementation Rules
@@ -127,11 +127,11 @@ Remaining features:
 - Do not include resigned employees in active payroll, reports, exports, or completion rates unless explicitly viewing history.
 - Do not change salary fields without appending an adjustment record.
 - Do not create real-person demo data in templates or docs.
-- Do not make new profile fields mandatory without safe migration defaults.
+- Do not collect member names, contact details, identity documents, bank data, or free-text personal notes.
+- Do not make new operational fields mandatory without safe migration defaults.
 
 ## Open Questions
 
-- Which employee profile fields are required for the first commercial release?
-- Should bank account details be stored at all, or only tracked as an external checklist due to local unencrypted storage?
+- Which non-identifying operational classifications are required for the first commercial release?
 - Should employee roster import be CSV-only first, or support Excel-compatible formats later?
 - Should rehire create a new employment lifecycle record under the same employee ID or require a new employee ID?

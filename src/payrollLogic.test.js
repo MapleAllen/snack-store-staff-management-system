@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createInitialWorkspace, migrateWorkspace } from "./payrollData.js";
+import { createInitialWorkspace, migrateWorkspace, WORKSPACE_VERSION } from "./payrollData.js";
 import {
   PAYROLL_FORMULA_METADATA,
   buildExportRows,
@@ -23,7 +23,7 @@ describe("workspace v3 salary state", () => {
   it("builds a generic demo workspace by default", () => {
     const workspace = createInitialWorkspace();
     expect(workspace.stores.map((store) => store.name)).toEqual(["示例一店", "示例二店", "示例三店", "示例四店"]);
-    expect(workspace.employees.every((employee) => employee.name.startsWith("示例员工"))).toBe(true);
+    expect(workspace.employees.every((employee) => employee.name.startsWith("成员代号"))).toBe(true);
   });
 
   it("migrates v2 employees as salary configured without losing assignments", () => {
@@ -31,7 +31,7 @@ describe("workspace v3 salary state", () => {
     v2.version = 2;
     v2.employees = v2.employees.map(({ salaryConfigured, ...employee }) => employee);
     const migrated = migrateWorkspace(v2);
-    expect(migrated.version).toBe(3);
+    expect(migrated.version).toBe(WORKSPACE_VERSION);
     expect(migrated.assignments).toHaveLength(v2.assignments.length);
     expect(migrated.employees.every((employee) => employee.salaryConfigured)).toBe(true);
   });

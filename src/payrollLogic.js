@@ -1,4 +1,4 @@
-import { createOpenMonthlyStoreRecord, defaultMonthlyEntry } from "./payrollData.js";
+import { createOpenMonthlyStoreRecord, defaultMonthlyEntry, PAYROLL_ADJUSTMENT_REASONS } from "./payrollData.js";
 
 export const PAYROLL_FORMULA_METADATA = Object.freeze({
   version: "core-payroll-v1",
@@ -450,7 +450,7 @@ export function buildExportRows(store, rows, exportStatus = "草稿") {
   return rows.map(({ employee, entry, breakdown, validationIssues = [] }) => ({
     工资表状态: exportStatus,
     门店: store.name,
-    姓名: employee.name,
+    成员代号: employee.name,
     基础工资: employee.baseSalary,
     加班时薪: employee.overtimeRate,
     加班时长: breakdown.overtimeHours,
@@ -464,7 +464,7 @@ export function buildExportRows(store, rows, exportStatus = "草稿") {
     社保补助: breakdown.socialInsurance,
     饭补: breakdown.mealAllowance,
     特殊加减项: breakdown.specialAdjustment,
-    备注: entry.note ?? "",
+    考勤业务原因: entry.attendanceReason ?? "",
     实发工资: validationIssues.length ? "" : breakdown.netSalary,
   }));
 }
@@ -542,7 +542,8 @@ export function sanitizeDownloadFileName(value, fallback = "门店") {
 }
 
 export function cloneDefaultEntry(currentEntry) {
-  return { ...defaultMonthlyEntry(), ...(currentEntry ?? {}) };
+  const { note: _legacyNote, ...safeEntry } = currentEntry ?? {};
+  return { ...defaultMonthlyEntry(), ...safeEntry };
 }
 
 export function entryHasInput(entry) {
@@ -554,7 +555,7 @@ export function entryHasDraftChanges(entry) {
   const draftFields = ["overtimeHours", "leaveDays", "leaveHours", "nightShiftHours", "specialAdjustment"];
   if (draftFields.some((field) => entry[field] !== "" && entry[field] != null)) return true;
   if (Array.isArray(entry.payrollAdjustments) && entry.payrollAdjustments.length > 0) return true;
-  if ((entry.note ?? "").trim()) return true;
+  if (entry.attendanceReason) return true;
   if (entry.auditPassed) return true;
   return false;
 }
@@ -784,14 +785,16 @@ export function createEmployeeDraft(employee) {
 
 export function createAdjustmentDraft(employee) {
   const source = typeof employee === "object" && employee ? employee : null;
+  const now = new Date();
+  const date = `${now.getFullYear()}-${`${now.getMonth() + 1}`.padStart(2, "0")}-${`${now.getDate()}`.padStart(2, "0")}`;
   return {
     employeeId: source?.id ?? employee ?? "",
-    date: new Date().toISOString().slice(0, 10),
+    date,
     values: {
       baseSalary: source ? `${source.baseSalary}` : "",
       overtimeRate: source ? `${source.overtimeRate}` : "",
       attendanceBonus: source ? `${source.attendanceBonus}` : "",
     },
-    notes: "",
+    reason: source?.salaryConfigured ? "薪资结构调整" : PAYROLL_ADJUSTMENT_REASONS[0],
   };
 }

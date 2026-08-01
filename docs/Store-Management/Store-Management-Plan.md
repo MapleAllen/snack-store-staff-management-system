@@ -39,7 +39,7 @@ Goals:
 
 Remaining features:
 
-- Add store metadata fields for business label, payroll contact, operating note, and optional internal code.
+- Add non-identifying store metadata fields for business label, operating note, and optional internal code.
 - Add archive reason and restore reason.
 - Add opened/closed lifecycle timeline.
 - Add migration defaults for existing stores.
@@ -85,7 +85,7 @@ Goals:
 Remaining features:
 
 - Add store-level audit timeline for name changes, archive/restore, config changes, and major payroll events.
-- Add store metadata export.
+- Add a privacy-safe store metadata export that excludes contact information and personal data.
 - Add filterable historical store reports.
 
 ## Phase 6: Testing Strategy — PARTIALLY COMPLETED

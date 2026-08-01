@@ -16,15 +16,49 @@ import {
   BulbOutlined,
 } from "@ant-design/icons";
 import { PageHeader } from "../components/PageHeader.jsx";
+import { DisabledActionHint } from "../components/DisabledActionHint.jsx";
 import { formatCurrency } from "../payrollLogic.js";
 
 const { Text, Paragraph } = Typography;
+
+const OPERATION_LABELS = {
+  "store-created": "门店已创建",
+  "store-renamed": "门店已改名",
+  "store-archived": "门店已停用",
+  "store-restored": "门店已恢复营业",
+  "salary-adjusted": "薪资组件已调整",
+  "employee-resigned": "成员已离职",
+  "employee-restored": "成员已恢复在职",
+  "rule-updated": "算薪规则已更新",
+  "employee-transferred": "成员已调店",
+  "payroll-closed": "工资月结已封账",
+  "payroll-unlocked": "工资月结已解锁",
+  "retail-day-closed": "营业日结已封账",
+  "retail-day-reopened": "营业日结已解锁",
+  "retail-sale-recorded": "销售单已记录",
+  "retail-sale-refunded": "销售退款已记录",
+  "cash-movement-recorded": "门店现金调入/调出已记录",
+  "cash-transfer-recorded": "跨门店现金调拨已记录",
+  "inventory-item-created": "商品目录已新增",
+  "inventory-item-updated": "商品资料已更新",
+  "inventory-item-archived": "商品目录已归档",
+  "inventory-movement-recorded": "手工库存操作已记录",
+  "inventory-stocktake-recorded": "全店盘点已保存",
+  "inventory-transfer-recorded": "跨店库存调拨已记录",
+  "supplier-created": "供应商已新增",
+  "supplier-archived": "供应商已归档",
+  "purchase-recorded": "采购入库已记录",
+  "purchase-settled": "采购付款已确认",
+  "purchase-returned": "供应商退货已记录",
+  "operating-expense-recorded": "经营费用已记录",
+  "operating-expense-voided": "经营费用已作废",
+};
 
 export function SettingsPage({
   store, stores, patchConfig, onExportBackup, onImportBackup,
   onCreateStore, onEditStore, onArchiveStore, onRestoreStore,
   autoBackups, autoBackupAvailable, autoBackupBusy, onCreateAutoBackup, onRestoreAutoBackup,
-  onResetDemoWorkspace, onRequestLock, ruleHistory,
+  onResetDemoWorkspace, onRequestLock, ruleHistory, operationLog = [],
 }) {
   const backupInputRef = useRef(null);
   const [drafts, setDrafts] = useState({});
@@ -132,7 +166,6 @@ export function SettingsPage({
       const status = await desktopApi.getLockStatus();
       setLockPinSet(status.pinSet);
       setPinModal(null);
-      if (mode === "clear" && onRequestLock) onRequestLock();
     } catch (err) {
       const messages = {
         "lock:pin-format-invalid": "PIN 必须为 4-6 位数字",
@@ -153,7 +186,7 @@ export function SettingsPage({
     } catch {}
   }
 
-  const latestBackup = autoBackups.length > 0 ? autoBackups[0] : null;
+  const latestBackup = autoBackups.find((backup) => !backup.isDamaged) ?? null;
   const employeeCount = (store.employees ?? []).length;
 
   const tabItems = [
@@ -277,6 +310,12 @@ export function SettingsPage({
       label: <Space><SafetyCertificateOutlined /> 数据安全与备份恢复</Space>,
       children: (
         <Space direction="vertical" size="large" style={{ width: "100%" }}>
+          <Card title="本地操作审计" style={{ borderRadius: 8 }}>
+            {operationLog.length === 0 ? <Text type="secondary">尚未记录关键操作。</Text> : <Timeline items={operationLog.slice(0, 20).map((event) => ({
+              color: event.type === "payroll-unlocked" ? "orange" : "blue",
+              children: <div><Text strong>{OPERATION_LABELS[event.type] ?? "关键操作"}</Text>{event.memberCode && <Text type="secondary"> · {event.memberCode}</Text>}{event.month && <Text type="secondary"> · {event.month}</Text>}{event.businessDate && <Text type="secondary"> · {event.businessDate}</Text>}<br /><Text type="secondary" style={{ fontSize: 12 }}>{event.at ? new Date(event.at).toLocaleString("zh-CN") : "历史记录"}</Text></div>,
+            }))} />}
+          </Card>
           {/* 应用访问保护锁 */}
           {desktopApi && (
             <Card title="应用访问保护锁" style={{ borderRadius: 8 }}>
@@ -325,15 +364,17 @@ export function SettingsPage({
                   <Text style={{ fontSize: 13, color: "#595959", marginTop: 4, display: "block" }}>
                     上次自动备份：{latestBackup ? new Date(latestBackup.createdAt).toLocaleString("zh-CN") : "今天已就绪"}
                   </Text>
-                  <Button
-                    type="primary"
-                    style={{ backgroundColor: "#52c41a", borderColor: "#52c41a", marginTop: 12 }}
-                    icon={<CloudUploadOutlined />}
-                    disabled={!autoBackupAvailable || autoBackupBusy}
-                    onClick={onCreateAutoBackup}
-                  >
-                    {autoBackupBusy ? "创建中…" : "立即创建本地恢复点"}
-                  </Button>
+                  <DisabledActionHint disabled={!autoBackupAvailable || autoBackupBusy} reason={autoBackupBusy ? "正在创建恢复点，请稍候。" : "本地恢复点仅在桌面版可用；当前可使用下方 JSON 备份。"}>
+                    <Button
+                      type="primary"
+                      style={{ backgroundColor: "#52c41a", borderColor: "#52c41a", marginTop: 12 }}
+                      icon={<CloudUploadOutlined />}
+                      disabled={!autoBackupAvailable || autoBackupBusy}
+                      onClick={onCreateAutoBackup}
+                    >
+                      {autoBackupBusy ? "创建中…" : "立即创建本地恢复点"}
+                    </Button>
+                  </DisabledActionHint>
                 </Card>
               </Col>
 
@@ -396,11 +437,11 @@ export function SettingsPage({
                     }}
                   >
                     <div>
-                      <Text strong>{new Date(backup.createdAt).toLocaleString("zh-CN")}</Text>
+                      <Space size={6}><Text strong>{new Date(backup.createdAt).toLocaleString("zh-CN")}</Text>{backup.isDamaged && <Tag color="error">已损坏</Tag>}</Space>
                       <br />
-                      <Text type="secondary" style={{ fontSize: 12 }}>{backup.reasonLabel}</Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>{backup.isDamaged ? backup.error : backup.reasonLabel}</Text>
                     </div>
-                    <Popconfirm
+                    {backup.isDamaged ? <Button size="small" disabled>不可恢复</Button> : <Popconfirm
                       title="恢复该恢复点？"
                       description="当前工作区数据将被该恢复点覆盖，建议先导出当前备份。"
                       onConfirm={() => onRestoreAutoBackup(backup.id)}
@@ -408,7 +449,7 @@ export function SettingsPage({
                       cancelText="取消"
                     >
                       <Button size="small">恢复</Button>
-                    </Popconfirm>
+                    </Popconfirm>}
                   </div>
                 ))}
               </Space>

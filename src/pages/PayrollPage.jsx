@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Card,
   Table,
@@ -32,8 +32,12 @@ import { StatCard } from "../components/StatCard.jsx";
 import { PageHeader } from "../components/PageHeader.jsx";
 import {
   formatCurrency,
+  getPayrollCloseBlockers,
+  getPayrollIssueItems,
   getPayrollIssueMessage,
+  getPayrollReviewStatus,
 } from "../payrollLogic.js";
+import { MONTHLY_PAYROLL_ADJUSTMENT_REASONS } from "../payrollData.js";
 
 const { Text } = Typography;
 
@@ -47,7 +51,7 @@ const PAYROLL_ADJUSTMENT_CATEGORIES = [
 const DEFAULT_PAYROLL_ADJUSTMENT_DRAFT = {
   category: "bonus",
   amount: "",
-  reason: "",
+  reason: MONTHLY_PAYROLL_ADJUSTMENT_REASONS[0],
   status: "pending",
 };
 
@@ -85,19 +89,27 @@ export function PayrollPage({
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [viewFilter, setViewFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
   const [formulaModalRow, setFormulaModalRow] = useState(null);
 
   const [adjustmentFormVisible, setAdjustmentFormVisible] = useState(false);
   const [adjustmentDraft, setAdjustmentDraft] = useState(DEFAULT_PAYROLL_ADJUSTMENT_DRAFT);
   const [editingAdjustmentId, setEditingAdjustmentId] = useState(null);
 
+  const payrollViewRows = useMemo(() => payrollRows.map((row) => ({
+    ...row,
+    closeBlockers: getPayrollCloseBlockers(row),
+    issueItems: getPayrollIssueItems(row),
+    reviewStatus: getPayrollReviewStatus(row),
+  })), [payrollRows]);
+
   const isClosed = monthlyStore?.status === "closed";
-  const blockerRows = payrollRows.filter((row) => row.closeBlockers.length > 0);
-  const reviewRows = payrollRows.filter((row) => row.employee.salaryConfigured && row.issueItems.length > 0);
-  const pendingCount = payrollRows.filter((row) => !row.entry.isComplete).length;
+  const blockerRows = payrollViewRows.filter((row) => row.closeBlockers.length > 0);
+  const reviewRows = payrollViewRows.filter((row) => row.employee.salaryConfigured && row.issueItems.length > 0);
+  const pendingCount = payrollViewRows.filter((row) => !row.entry.isComplete).length;
   const canClose = blockerRows.length === 0;
 
-  const visiblePayrollRows = payrollRows.filter((row) => {
+  const visiblePayrollRows = useMemo(() => payrollViewRows.filter((row) => {
     if (searchTerm && !row.employee.name.includes(searchTerm.trim()) && !row.employee.id.includes(searchTerm.trim())) {
       return false;
     }
@@ -105,7 +117,17 @@ export function PayrollPage({
     if (viewFilter === "issues") return row.closeBlockers.length > 0 || row.issueItems.length > 0;
     if (viewFilter === "resigned") return row.employee.isResigned;
     return true;
-  });
+  }), [payrollViewRows, searchTerm, viewFilter]);
+
+  useEffect(() => {
+    const targetId = selectedRow?.employee?.id;
+    if (!targetId) return;
+    const index = visiblePayrollRows.findIndex((row) => row.employee.id === targetId);
+    if (index >= 0) {
+      const page = Math.floor(index / 10) + 1;
+      setCurrentPage((prev) => (prev !== page ? page : prev));
+    }
+  }, [selectedRow?.employee?.id, visiblePayrollRows]);
 
   const selectedAdjustments = getPayrollAdjustments(selectedRow?.entry);
 
@@ -161,7 +183,7 @@ export function PayrollPage({
 
   const columns = [
     {
-      title: "员工姓名与状态",
+      title: "成员代号与状态",
       dataIndex: ["employee", "name"],
       key: "name",
       width: 160,
@@ -361,11 +383,11 @@ export function PayrollPage({
       <Row gutter={[24, 24]}>
         <Col xs={24} xl={15}>
           <Card
-            title={`员工工资表 (${visiblePayrollRows.length}/${payrollRows.length})`}
+            title={`员工工资表 (${visiblePayrollRows.length}/${payrollViewRows.length})`}
             extra={
               <Space wrap>
                 <Input
-                  placeholder="搜索姓名或工号"
+                  placeholder="搜索成员代号或系统编号"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   style={{ width: 150 }}
@@ -390,7 +412,11 @@ export function PayrollPage({
               columns={columns}
               dataSource={visiblePayrollRows}
               rowKey={(row) => row.employee.id}
-              pagination={{ pageSize: 10 }}
+              pagination={{
+                current: currentPage,
+                pageSize: 10,
+                onChange: (page) => setCurrentPage(page),
+              }}
               size="middle"
               rowClassName={(row) =>
                 row.employee.id === selectedRow?.employee.id
@@ -490,10 +516,12 @@ export function PayrollPage({
                             style={{ width: 120 }}
                           />
                         </Space>
-                        <Input
-                          placeholder="调整原因说明 (如：节日奖金、损耗扣款)"
+                        <Select
+                          placeholder="选择标准业务原因"
                           value={adjustmentDraft.reason}
-                          onChange={(e) => setAdjustmentDraft({ ...adjustmentDraft, reason: e.target.value })}
+                          options={MONTHLY_PAYROLL_ADJUSTMENT_REASONS.map((reason) => ({ value: reason, label: reason }))}
+                          onChange={(reason) => setAdjustmentDraft({ ...adjustmentDraft, reason })}
+                          style={{ width: "100%" }}
                         />
                         <Space justify="end" style={{ width: "100%" }}>
                           <Button size="small" onClick={resetAdjustmentForm}>取消</Button>
