@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Fixed the per-employee confirmation path so an unconfirmed row can be confirmed from payroll instead of disabling its own action.
+- Grouped owner dashboard blockers by store and corrected confirmation denominators.
+- Restored responsive drawer navigation and mobile card layouts while preserving the desktop payroll split workspace.
+- Added post-close payout batches, per-employee payment and payslip delivery status, and printable anonymized payslips.
+- Added CSV manifest sidecars with payroll metadata and SHA-256 artifact checksums.
+
 ## 2.0.0 - 2026-06-21
 
 - Established a clean public-source baseline under the MIT License.

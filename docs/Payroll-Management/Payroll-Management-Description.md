@@ -6,7 +6,7 @@ Payroll-Management
 
 ## Purpose
 
-Payroll-Management is the owner-facing monthly payroll workflow. It lets a store operator enter attendance-related payroll inputs, review each employee's calculated salary, explicitly confirm every employee, close a store-month into a frozen snapshot, unlock with a reason when mistakes are found, and export draft or formal payroll CSV files.
+Payroll-Management is the owner-facing monthly payroll workflow. It lets a store operator enter attendance-related payroll inputs, review each employee's calculated salary, explicitly confirm every employee, close a store-month into a frozen snapshot, hand the frozen payroll into a per-employee payout workflow, print individual payslips, and export traceable payroll artifacts.
 
 ## Current Implementation
 
@@ -19,7 +19,8 @@ The workflow is implemented across `src/App.jsx`, `src/pages/PayrollPage.jsx`, `
 - Tracks an active store and active month from `App.jsx`.
 - Builds `payrollRows` with `getStorePayrollRows(workspace, activeMonth, activeStore)`.
 - Displays estimated, confirmed, and closed values without merging the meanings.
-- Supports desktop table layout and mobile card layout in `PayrollPage.jsx`.
+- Preserves the desktop split table/inspector workspace and switches to touch-friendly employee cards on narrow screens.
+- Shows a five-step workflow indicator for attendance confirmation, payroll review, month close, payout delivery, and completion.
 
 **Payroll entry**
 
@@ -35,6 +36,7 @@ The workflow is implemented across `src/App.jsx`, `src/pages/PayrollPage.jsx`, `
 - Confirmation is blocked when structured validation issues exist or salary is not configured; the UI still shows the Chinese issue message.
 - Confirmation records `completedAt`.
 - Draft rows with edited values but no confirmation remain close blockers.
+- The payroll confirmation button is disabled only by actual salary/input validation issues; the unconfirmed state itself remains actionable.
 
 **Close and unlock**
 
@@ -43,6 +45,15 @@ The workflow is implemented across `src/App.jsx`, `src/pages/PayrollPage.jsx`, `
 - `closeStoreMonth()` freezes a deep-cloned snapshot, stamps each newly closed row with formula version metadata, and appends close history.
 - `confirmClosePayroll()` creates an automatic recovery point after successful close in desktop mode.
 - `unlockStoreMonth()` requires a non-empty reason and clears the frozen snapshot.
+- Unlock clears an untouched payout batch, but is blocked after any employee has been recorded as paid so payment evidence cannot be silently discarded.
+
+**Payout and payslip handoff**
+
+- A closed store-month can create one local payout batch with planned pay date, payment method, optional reference, and one row per frozen employee.
+- Each payout row tracks pending/paid/failed payment status and not-delivered/delivered/acknowledged payslip status.
+- Batch status is derived as pending, in progress, or fully paid from the employee rows.
+- Closed payroll can print one anonymized payslip per frozen employee, including breakdown, net pay, close status, and formula version.
+- Payout creation and row changes append privacy-minimized operation log events.
 
 **Review and export**
 
@@ -53,8 +64,8 @@ The workflow is implemented across `src/App.jsx`, `src/pages/PayrollPage.jsx`, `
 - Shows current employee wage components, calculated deductions/additions, recent salary adjustments, and close/unlock history.
 - Shows formula trace steps in the employee detail panel with source fields, formula text, input values, raw values, rounded amounts, and rounding explanations when trace data is available.
 - Older closed snapshots without stored trace or formula metadata show frozen payroll amounts and do not get recalculated or backfilled from live data.
-- `exportCurrentMonth()` exports CSV with either `草稿·未月结` or `正式·已月结` status.
-- Payroll logic now exposes `buildPayrollExportMetadata()` for future payment handoff and audit flows; the current payroll page does not download this metadata yet.
+- `exportCurrentMonth()` exports CSV with either `草稿·未月结` or `正式·已月结` status and a matching `.manifest.json` sidecar.
+- The manifest includes counts, totals, formula metadata, generation time, artifact format, and SHA-256 of the downloaded CSV bytes.
 
 ## Architecture
 
@@ -73,7 +84,7 @@ Payroll-Management is a page-level workflow over shared data and operation modul
 - `confirmUnlockPayroll(event)`
   - Applies reasoned unlock.
 - `exportCurrentMonth()`
-  - Builds and downloads CSV export.
+  - Builds CSV, hashes the exact artifact, and downloads CSV plus manifest.
 
 ### Payroll UI (`src/pages/PayrollPage.jsx`)
 
@@ -109,12 +120,11 @@ Payroll-Management is a page-level workflow over shared data and operation modul
 
 - Payroll has no batch import from attendance systems or spreadsheets.
 - CSV export is single active store/month only from the payroll page.
-- Export metadata is available at the logic layer, but the payroll UI still downloads only the existing CSV file.
 - Payroll UI entry for special adjustments now supports per-employee structured records, but there is no import workflow, bulk editing, export manifest, or electronic approval workflow yet.
 - Open historical months recalculate from current employee salary and store config unless already closed.
 - Calculation trace and formula version metadata exist for newly closed snapshots, but legacy closed snapshots may not include that metadata.
 - Review-only exception items are still display strings rather than structured issue objects.
-- No electronic approval, payment status, payslip generation, or employee-facing acknowledgement.
+- Payslip acknowledgement is recorded locally by the operator; there is no employee account, electronic signature, or remote self-service portal.
 - Close/unlock audit is per store-month only; there is no global payroll audit log.
 - All-store readiness is preview-only; no batch close, shared close confirmation, automatic recovery point, or multi-store export is implemented.
 
@@ -122,6 +132,6 @@ Payroll-Management is a page-level workflow over shared data and operation modul
 
 - Add attendance import and validation preview.
 - Add multi-store month close workflow from the overview.
-- Add payroll export packages that connect CSV, metadata sidecars, and snapshot hashes.
+- Add a multi-store package around the existing per-store CSV and manifest artifacts.
 - Add bulk/import/export-manifest support for categorized payroll adjustments.
-- Add payment status tracking after formal export.
+- Add reversal/correction records for paid batches before allowing post-payment unlock.

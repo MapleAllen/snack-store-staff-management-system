@@ -31,6 +31,7 @@ Reporting is implemented mainly in `src/pages/ReportsPage.jsx`. Payroll CSV expo
 **Store-level report rows**
 
 - Displays store name, employee count, confirmed count, forecast amount, confirmed or closed amount, status badge, top blocker/review item, overtime, leave deductions, and special adjustment total.
+- Closed stores also show paid-employee and delivered-payslip progress from the payout batch.
 - Clicking an active store row selects that store and navigates to payroll.
 - Archived store rows are disabled in the report list.
 
@@ -40,7 +41,7 @@ Reporting is implemented mainly in `src/pages/ReportsPage.jsx`. Payroll CSV expo
 - Export status is `草稿·未月结` for open months and `正式·已月结` for closed months.
 - `buildExportRows()` creates Chinese-labeled row objects.
 - `buildPayrollExportMetadata()` creates machine-readable handoff metadata for the same store/month scope, including draft/formal status, counts, totals, generated time, and formula version summary.
-- The metadata helper is not wired to UI download yet, so existing CSV files and column formats are unchanged.
+- Every CSV download now includes a matching `.manifest.json` sidecar with the artifact SHA-256; the existing CSV column format remains unchanged.
 - `csvEscape()` escapes cells and neutralizes spreadsheet formula injection prefixes for string cells.
 - CSV download includes UTF-8 BOM and a sanitized filename.
 
@@ -60,7 +61,7 @@ Reports-And-Exports is a derived-read module plus a single-store CSV export acti
 ### Export Flow (`src/App.jsx`, `src/payrollLogic.js`)
 
 - `exportCurrentMonth()`
-  - Builds rows for active store/month and downloads CSV.
+  - Builds rows for active store/month, hashes the exact CSV bytes, and downloads CSV plus manifest.
 - `buildExportRows(store, rows, exportStatus)`
   - Creates localized export objects.
 - `buildPayrollExportMetadata(store, month, rows, monthlyStore, options)`
@@ -86,7 +87,7 @@ Reports-And-Exports is a derived-read module plus a single-store CSV export acti
 - Report page is a derived summary only; it does not persist report snapshots.
 - CSV export is single active store/month from the payroll page, not a multi-store package.
 - There is no XLSX, PDF, JSON, or print-ready report export.
-- There is a logic-level export metadata helper, but no downloaded export manifest, checksum, row hash, or audit sidecar file yet.
+- Per-store exports have a downloaded manifest and CSV checksum; there is not yet a closed-snapshot row hash or multi-store bundle.
 - Open-month report values can change after rule or salary edits until the month is closed.
 - Report page does not provide trend comparison, historical charts, or employee-level drill-down.
 - Archived store report rows are visible when included but not clickable.

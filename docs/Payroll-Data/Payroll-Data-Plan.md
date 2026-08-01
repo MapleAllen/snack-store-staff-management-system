@@ -24,9 +24,9 @@ Goals:
 
 Completed work:
 
-- `WORKSPACE_VERSION = 26` is defined in `src/payrollData.js`.
+- `WORKSPACE_VERSION = 28` is defined in `src/payrollData.js`; v28 adds normalized post-close payout and payslip-delivery rows.
 - `createInitialWorkspace()` creates generic stores, employees, assignments, adjustments, rule history, and empty monthly records.
-- `createOpenMonthlyStoreRecord()` normalizes open/closed month-store records while preserving `snapshot` and `closeHistory`.
+- `createOpenMonthlyStoreRecord()` normalizes open/closed month-store records while preserving `snapshot`, `closeHistory`, and optional payout handoff state.
 - `migrateWorkspace()` normalizes current and legacy workspace shapes.
 - Tests in `src/payrollLogic.test.js` and `src/workspaceOperations.test.js` cover demo workspace creation, v2 salary migration, legacy nested employee migration, and frozen snapshot behavior.
 
@@ -103,7 +103,7 @@ Goals:
 
 Completed work:
 
-- Existing tests cover generic demo data, v2 salary state, legacy nested employees, monthly records, transfer, close, and unlock.
+- Existing tests cover generic demo data, v2 salary state, legacy nested employees, monthly records, transfer, close, unlock, payout creation, payout-row normalization, and paid-row unlock protection.
 
 Remaining features:
 

@@ -82,12 +82,15 @@ Completed work:
 
 - Add a pure all-active-store payroll close-readiness summary for the overview, including per-store statuses, structured blocker rows, review counts, and estimated/confirmed/closed totals.
 - Keep the summary preview-only: archived stores are excluded, empty stores are not ready, and closed stores use frozen snapshot rows.
+- Add a per-store payout batch after close with planned date, payment method, reference, per-employee payment status, and payslip delivery status.
+- Add printable anonymized payslips sourced from the frozen snapshot.
+- Block direct unlock once any employee is recorded as paid so payout evidence is not silently removed.
 
 Remaining features:
 
 - Add batch close operation with per-store blocker report.
 - Add multi-store export package for closed months.
-- Add payment status tracking: not exported, exported, paid, corrected.
+- Add payment reversal/correction records and a controlled post-payment unlock path.
 
 ## Phase 5: Payroll Audit Trail — PARTIALLY COMPLETED
 
@@ -100,12 +103,14 @@ Goals:
 Completed work:
 
 - Add a logic-level export metadata handoff helper with store/month scope, draft/formal status, row counts, close-review counts, totals, generated time, and formula version summary.
-- Preserve the current CSV export behavior and closed snapshot semantics; metadata is not yet downloaded or persisted.
+- Preserve the current CSV column behavior and closed snapshot semantics while downloading metadata as a sidecar rather than persisting it into the workspace.
+- Download a matching manifest beside every payroll CSV and include the SHA-256 of the exact CSV artifact.
+- Add privacy-minimized payout creation and payout-row audit events.
 
 Remaining features:
 
 - Add global payroll operation log for row edits, confirmations, close, unlock, export, and payment status changes.
-- Add export manifest with row count, totals, generated time, app version, and snapshot hash.
+- Add app/workspace versions and a closed-snapshot row hash to the existing manifest.
 - Add audit report screen for closed months.
 
 ## Phase 6: Testing Strategy — PARTIALLY COMPLETED
