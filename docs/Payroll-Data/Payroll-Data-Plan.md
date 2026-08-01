@@ -14,17 +14,17 @@ Make the workspace data model explicit, validated, and migration-safe enough to 
 - Payroll history is preserved: closed snapshots, assignments, adjustments, and close history are never discarded during migration.
 - Validation reports are actionable: unexpected structure should produce clear warnings or fatal errors before save.
 
-## Phase 1: Current v3 Workspace Baseline — DONE
+## Phase 1: Current Workspace Baseline — DONE
 
 Status: **Done**
 
 Goals:
 
-- Establish a generic demo workspace and a normalized v3 data shape.
+- Establish a generic demo workspace and a normalized current data shape.
 
 Completed work:
 
-- `WORKSPACE_VERSION = 3` is defined in `src/payrollData.js`.
+- `WORKSPACE_VERSION = 26` is defined in `src/payrollData.js`.
 - `createInitialWorkspace()` creates generic stores, employees, assignments, adjustments, rule history, and empty monthly records.
 - `createOpenMonthlyStoreRecord()` normalizes open/closed month-store records while preserving `snapshot` and `closeHistory`.
 - `migrateWorkspace()` normalizes current and legacy workspace shapes.
@@ -68,15 +68,15 @@ Status: **Not Started**
 
 Goals:
 
-- Extend the workspace model from demo payroll data to real staff and store administration without introducing cloud sync.
+- Extend the workspace model for real payroll operations without introducing cloud sync or personal-information collection.
 
 Remaining features:
 
-- Add optional employee fields for staff number, hire date, role, contact method, bank account notes, emergency contact, and document status.
-- Add store metadata for business name, payroll contact, operating status notes, and archive reason.
+- Keep member records limited to anonymous member codes, stable internal IDs, payroll state, salary components, and lifecycle data.
+- Add only non-identifying store metadata such as generic business label, operating status notes, archive reason, and optional internal code.
 - Add formal employment lifecycle fields separate from simple `isResigned` and `resignationDate`.
 - Define which fields are included in payroll exports and which remain internal profile data.
-- Add migration defaults that keep old workspaces valid without inventing false real-world data.
+- Remove legacy names, contact details, bank data, identity/document data, and personal free text while keeping old workspaces valid.
 
 ## Phase 5: Workspace Metadata and Audit Support — NOT STARTED
 
@@ -116,14 +116,14 @@ Remaining features:
 ## Implementation Rules
 
 - Do not change `WORKSPACE_VERSION` without adding migration tests.
-- Do not remove employee, assignment, adjustment, monthly record, or close snapshot fields during migration.
+- Preserve payroll-relevant employee, assignment, adjustment, monthly record, and close snapshot fields during migration; deliberately remove personal-identifying fields.
 - Do not reintroduce third-party retailer branding, real store locations, or real employee data into templates.
 - Do not make new commercial fields required unless migration can supply safe empty defaults.
 - Do not fold salary component changes directly into employee records without creating adjustment history.
 
 ## Open Questions
 
-- Which employee profile fields are required for the first commercial payroll release, and which should remain optional notes?
+- Which non-identifying member and store fields are required for the first commercial payroll release?
 - Should workspace validation live only in `shared/backup-format.js`, only in `src/payrollData.js`, or be split into envelope validation and deep schema validation?
 - Should future workspace schemas be documented as JSON Schema, TypeScript types, or executable validators?
 - Should workspace metadata include a stable workspace ID for support and backup comparison?

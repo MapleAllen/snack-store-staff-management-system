@@ -16,7 +16,7 @@ The module is implemented in `src/payrollData.js`. It exports schema constants, 
 
 **Workspace identity and versioning**
 
-- Exports `WORKSPACE_VERSION = 3` as the current workspace schema version.
+- Exports `WORKSPACE_VERSION = 26` as the current workspace schema version.
 - Exports `INITIAL_ASSIGNMENT_MONTH = "2000-01"` for seed assignment history.
 - Provides `createDefaultMonthValue(date = new Date())`, returning `YYYY-MM` for UI month selectors.
 
@@ -35,7 +35,7 @@ The module is implemented in `src/payrollData.js`. It exports schema constants, 
 
 **Migration and normalization**
 
-- `migrateWorkspace(workspace)` returns the current v3 workspace shape and normalizes stores, employees, assignments, adjustments, rule history, and monthly records.
+- `migrateWorkspace(workspace)` returns the current v26 workspace shape and normalizes stores, employees, assignments, adjustments, rule history, operation logs, monthly records, and operating records.
 - `migrateLegacyWorkspace(workspace)` handles older workspaces that do not have `assignments` by reconstructing employees and initial store assignments from legacy nested store data.
 - `normalizeEmployee(employee)` sets `salaryConfigured` to true unless the existing record explicitly has `salaryConfigured: false`.
 - `normalizeStore(store)` merges every store config with `DEFAULT_STORE_CONFIG` and normalizes `status`, `createdAt`, and `archivedAt`.
@@ -75,7 +75,7 @@ Payroll-Data is a single-file data contract and migration module. It is intentio
 
 ```js
 {
-  version: 3,
+  version: 26,
   stores: [{ id, name, config, status, createdAt, archivedAt }],
   employees: [{
     id, name, baseSalary, overtimeRate, attendanceBonus,
@@ -87,6 +87,7 @@ Payroll-Data is a single-file data contract and migration module. It is intentio
     previousValue, newValue, changes, date, notes
   }],
   ruleHistory: [{ id, storeId, key, label, previousValue, newValue, at }],
+  operationLog: [{ id, type, storeId, employeeId, memberCode, month, businessDate, key, at }],
   monthlyRecords: {
     [month]: {
       [storeId]: { rows, savedAt, status, closedAt, snapshot, closeHistory }

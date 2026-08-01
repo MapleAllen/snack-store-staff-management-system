@@ -23,6 +23,7 @@ Store management is implemented through `src/pages/SettingsPage.jsx`, store hand
 - `restoreStore()` changes status back to `active`.
 - The final active store cannot be archived.
 - Stores with active current or future employee assignments cannot be archived until employees are transferred or resigned.
+- Store archival is evaluated only against payroll scope: the final active store remains protected, and current or future assignments for non-resigned employees must be resolved first.
 
 **Active store selection**
 
