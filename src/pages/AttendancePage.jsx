@@ -40,14 +40,14 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
 
   const columns = [
     {
-      title: "成员代号",
+      title: "姓名",
       dataIndex: ["employee", "name"],
       key: "name",
       width: 130,
       render: (text, record) => (
         <Space direction="vertical" size={0}>
           <Text strong>{text}</Text>
-          <Text type="secondary" style={{ fontSize: 11 }}>工号: {record.employee.id}</Text>
+          <Text type="secondary" style={{ fontSize: 11 }}>工号: {record.employee.employeeNumber || record.employee.id.slice(-8)}</Text>
         </Space>
       ),
     },
@@ -302,7 +302,7 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
               return (
                 <div className={`mobile-record-card mobile-record-card--flat ${row.entry.isComplete ? "mobile-record-card--confirmed" : ""}`} key={row.employee.id}>
                   <div className="mobile-record-heading">
-                    <div><Text strong>{row.employee.name}</Text><Text type="secondary">编号 {row.employee.id.slice(-8)}</Text></div>
+                    <div><Text strong>{row.employee.name}</Text><Text type="secondary">{row.employee.employeeNumber ? `工号 ${row.employee.employeeNumber}` : `编号 ${row.employee.id.slice(-8)}`}</Text></div>
                     <Tag color={row.entry.isComplete ? "success" : "warning"}>{row.entry.isComplete ? "已确认" : "待确认"}</Tag>
                   </div>
                   <div className="mobile-input-grid">

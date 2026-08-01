@@ -23,7 +23,61 @@ describe("workspace v3 salary state", () => {
   it("builds a generic demo workspace by default", () => {
     const workspace = createInitialWorkspace();
     expect(workspace.stores.map((store) => store.name)).toEqual(["示例一店", "示例二店", "示例三店", "示例四店"]);
-    expect(workspace.employees.every((employee) => employee.name.startsWith("成员代号"))).toBe(true);
+    expect(workspace.employees.every((employee) => Boolean(employee.name))).toBe(true);
+    expect(workspace.employees.every((employee) => /^1[3-9]\d{9}$/.test(employee.phone))).toBe(true);
+    expect(workspace.employees.every((employee) => Boolean(employee.employeeNumber))).toBe(true);
+  });
+
+  it("preserves real employee names and profile fields on migration", () => {
+    const workspace = createInitialWorkspace();
+    const profile = { name: "真实姓名", phone: "13912345678", employeeNumber: "EMP-999", role: "店长", hireDate: "2025-01-01" };
+    workspace.employees[0] = { ...workspace.employees[0], ...profile };
+    const migrated = migrateWorkspace(workspace);
+    const employee = migrated.employees.find((item) => item.id === workspace.employees[0].id);
+    expect(employee).toMatchObject(profile);
+  });
+
+  it("normalizes invalid phone and hire dates on migration", () => {
+    const workspace = createInitialWorkspace();
+    workspace.employees[0] = { ...workspace.employees[0], phone: "12345", hireDate: "not-a-date" };
+    const migrated = migrateWorkspace(workspace);
+    expect(migrated.employees[0].phone).toBe("");
+    expect(migrated.employees[0].hireDate).toBeNull();
+  });
+
+  it("maps legacy member-code names in closed snapshots to current employee names", () => {
+    const workspace = createInitialWorkspace();
+    const storeId = workspace.stores[0].id;
+    const employee = workspace.employees[0];
+    workspace.monthlyRecords = { "2026-06": { [storeId]: {
+      status: "closed",
+      rows: {},
+      snapshot: [{ employee: { id: employee.id, name: "成员代号-001", baseSalary: employee.baseSalary, overtimeRate: employee.overtimeRate, attendanceBonus: employee.attendanceBonus }, entry: {}, breakdown: {} }],
+    } } };
+    const migrated = migrateWorkspace(workspace);
+    const snapshot = migrated.monthlyRecords["2026-06"][storeId].snapshot;
+    expect(snapshot[0].employee.name).toBe(employee.name);
+  });
+
+  it("keeps real-name snapshots frozen when the employee was renamed after close", () => {
+    const workspace = createInitialWorkspace();
+    const storeId = workspace.stores[0].id;
+    const employee = workspace.employees[0];
+    workspace.monthlyRecords = { "2026-06": { [storeId]: {
+      status: "closed",
+      rows: {},
+      snapshot: [{ employee: { id: employee.id, name: "当时的姓名", baseSalary: employee.baseSalary, overtimeRate: employee.overtimeRate, attendanceBonus: employee.attendanceBonus }, entry: {}, breakdown: {} }],
+    } } };
+    const migrated = migrateWorkspace(workspace);
+    const snapshot = migrated.monthlyRecords["2026-06"][storeId].snapshot;
+    expect(snapshot[0].employee.name).toBe("当时的姓名");
+  });
+
+  it("prefers stored employee names in operation logs instead of rewriting history", () => {
+    const workspace = createInitialWorkspace();
+    workspace.operationLog = [{ id: "log-1", type: "employee-resigned", employeeId: workspace.employees[0].id, employeeName: "历史姓名", at: "2026-01-01T00:00:00Z" }];
+    const migrated = migrateWorkspace(workspace);
+    expect(migrated.operationLog[0].employeeName).toBe("历史姓名");
   });
 
   it("migrates v2 employees as salary configured without losing assignments", () => {

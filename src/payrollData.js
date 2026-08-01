@@ -1,6 +1,6 @@
 import { OPERATION_TYPES } from "./operationAudit.js";
 
-export const WORKSPACE_VERSION = 28;
+export const WORKSPACE_VERSION = 29;
 export const INITIAL_ASSIGNMENT_MONTH = "2000-01";
 
 export const ATTENDANCE_REASONS = ["排班调整", "门店经营安排", "系统更正", "其他标准原因"];
@@ -30,12 +30,12 @@ export const STORE_TEMPLATES = [
     name: "示例一店",
     config: { ...DEFAULT_STORE_CONFIG, auditPassedBonus: 260 },
     employees: [
-      { id: "demo-1-employee-1", name: "成员代号 A1", baseSalary: 3200, overtimeRate: 15, attendanceBonus: 200 },
-      { id: "demo-1-employee-2", name: "成员代号 A2", baseSalary: 2800, overtimeRate: 15, attendanceBonus: 200 },
-      { id: "demo-1-employee-3", name: "成员代号 A3", baseSalary: 2400, overtimeRate: 15, attendanceBonus: 200 },
-      { id: "demo-1-employee-4", name: "成员代号 A4", baseSalary: 2200, overtimeRate: 15, attendanceBonus: 200 },
-      { id: "demo-1-employee-5", name: "成员代号 A5", baseSalary: 2000, overtimeRate: 15, attendanceBonus: 200 },
-      { id: "demo-1-employee-6", name: "成员代号 A6", baseSalary: 2600, overtimeRate: 15, attendanceBonus: 200 },
+      { id: "demo-1-employee-1", name: "张伟", phone: "13800000001", employeeNumber: "EMP-A01", role: "店长", hireDate: "2023-06-01", baseSalary: 3200, overtimeRate: 15, attendanceBonus: 200 },
+      { id: "demo-1-employee-2", name: "李娜", phone: "13800000002", employeeNumber: "EMP-A02", role: "收银", hireDate: "2023-06-01", baseSalary: 2800, overtimeRate: 15, attendanceBonus: 200 },
+      { id: "demo-1-employee-3", name: "王强", phone: "13800000003", employeeNumber: "EMP-A03", role: "店员", hireDate: "2024-01-15", baseSalary: 2400, overtimeRate: 15, attendanceBonus: 200 },
+      { id: "demo-1-employee-4", name: "赵敏", phone: "13800000004", employeeNumber: "EMP-A04", role: "店员", hireDate: "2024-03-01", baseSalary: 2200, overtimeRate: 15, attendanceBonus: 200 },
+      { id: "demo-1-employee-5", name: "刘洋", phone: "13800000005", employeeNumber: "EMP-A05", role: "店员", hireDate: "2024-07-10", baseSalary: 2000, overtimeRate: 15, attendanceBonus: 200 },
+      { id: "demo-1-employee-6", name: "陈静", phone: "13800000006", employeeNumber: "EMP-A06", role: "收银", hireDate: "2025-02-20", baseSalary: 2600, overtimeRate: 15, attendanceBonus: 200 },
     ],
   },
   {
@@ -44,12 +44,12 @@ export const STORE_TEMPLATES = [
     name: "示例二店",
     config: { ...DEFAULT_STORE_CONFIG, nightShiftRate: 10 },
     employees: [
-      { id: "demo-2-employee-1", name: "成员代号 B1", baseSalary: 3000, overtimeRate: 15, attendanceBonus: 200 },
-      { id: "demo-2-employee-2", name: "成员代号 B2", baseSalary: 2800, overtimeRate: 15, attendanceBonus: 200 },
-      { id: "demo-2-employee-3", name: "成员代号 B3", baseSalary: 2600, overtimeRate: 15, attendanceBonus: 200 },
-      { id: "demo-2-employee-4", name: "成员代号 B4", baseSalary: 2400, overtimeRate: 15, attendanceBonus: 200 },
-      { id: "demo-2-employee-5", name: "成员代号 B5", baseSalary: 2200, overtimeRate: 15, attendanceBonus: 200 },
-      { id: "demo-2-employee-6", name: "成员代号 B6", baseSalary: 2000, overtimeRate: 15, attendanceBonus: 200 },
+      { id: "demo-2-employee-1", name: "杨光", phone: "13800000011", employeeNumber: "EMP-B01", role: "店长", hireDate: "2023-09-01", baseSalary: 3000, overtimeRate: 15, attendanceBonus: 200 },
+      { id: "demo-2-employee-2", name: "周婷", phone: "13800000012", employeeNumber: "EMP-B02", role: "收银", hireDate: "2024-02-01", baseSalary: 2800, overtimeRate: 15, attendanceBonus: 200 },
+      { id: "demo-2-employee-3", name: "吴磊", phone: "13800000013", employeeNumber: "EMP-B03", role: "店员", hireDate: "2024-05-15", baseSalary: 2600, overtimeRate: 15, attendanceBonus: 200 },
+      { id: "demo-2-employee-4", name: "郑爽", phone: "13800000014", employeeNumber: "EMP-B04", role: "店员", hireDate: "2024-08-01", baseSalary: 2400, overtimeRate: 15, attendanceBonus: 200 },
+      { id: "demo-2-employee-5", name: "孙悦", phone: "13800000015", employeeNumber: "EMP-B05", role: "店员", hireDate: "2025-01-05", baseSalary: 2200, overtimeRate: 15, attendanceBonus: 200 },
+      { id: "demo-2-employee-6", name: "何芳", phone: "13800000016", employeeNumber: "EMP-B06", role: "收银", hireDate: "2025-04-18", baseSalary: 2000, overtimeRate: 15, attendanceBonus: 200 },
     ],
   },
   {
@@ -58,10 +58,10 @@ export const STORE_TEMPLATES = [
     name: "示例三店",
     config: { ...DEFAULT_STORE_CONFIG },
     employees: [
-      { id: "demo-3-employee-1", name: "成员代号 C1", baseSalary: 3200, overtimeRate: 16, attendanceBonus: 200 },
-      { id: "demo-3-employee-2", name: "成员代号 C2", baseSalary: 2800, overtimeRate: 15, attendanceBonus: 200 },
-      { id: "demo-3-employee-3", name: "成员代号 C3", baseSalary: 2400, overtimeRate: 15, attendanceBonus: 200 },
-      { id: "demo-3-employee-4", name: "成员代号 C4", baseSalary: 2000, overtimeRate: 15, attendanceBonus: 200 },
+      { id: "demo-3-employee-1", name: "马超", phone: "13800000021", employeeNumber: "EMP-C01", role: "店长", hireDate: "2024-01-08", baseSalary: 3200, overtimeRate: 16, attendanceBonus: 200 },
+      { id: "demo-3-employee-2", name: "黄蓉", phone: "13800000022", employeeNumber: "EMP-C02", role: "收银", hireDate: "2024-04-01", baseSalary: 2800, overtimeRate: 15, attendanceBonus: 200 },
+      { id: "demo-3-employee-3", name: "徐明", phone: "13800000023", employeeNumber: "EMP-C03", role: "店员", hireDate: "2024-09-10", baseSalary: 2400, overtimeRate: 15, attendanceBonus: 200 },
+      { id: "demo-3-employee-4", name: "高远", phone: "13800000024", employeeNumber: "EMP-C04", role: "店员", hireDate: "2025-06-01", baseSalary: 2000, overtimeRate: 15, attendanceBonus: 200 },
     ],
   },
   {
@@ -170,10 +170,20 @@ export function createAnonymousMemberCode(sequence) {
   return `成员代号-${String(sequence).padStart(3, "0")}`;
 }
 
+function normalizePhone(value) {
+  const phone = `${value ?? ""}`.trim();
+  return /^1[3-9]\d{9}$/.test(phone) ? phone : "";
+}
+
 function normalizeEmployee(employee, index) {
+  const name = `${employee?.name ?? ""}`.trim() || createAnonymousMemberCode(index + 1);
   return {
     id: employee?.id,
-    name: createAnonymousMemberCode(index + 1),
+    name,
+    phone: normalizePhone(employee?.phone),
+    employeeNumber: `${employee?.employeeNumber ?? ""}`.trim(),
+    role: `${employee?.role ?? ""}`.trim(),
+    hireDate: /^\d{4}-\d{2}-\d{2}$/.test(`${employee?.hireDate ?? ""}`) ? employee.hireDate : null,
     baseSalary: Number(employee?.baseSalary) || 0,
     overtimeRate: Number(employee?.overtimeRate) || 0,
     attendanceBonus: Number(employee?.attendanceBonus) || 0,
@@ -217,16 +227,16 @@ function normalizeAssignment(assignment) {
   };
 }
 
-function normalizeAdjustment(adjustment, memberCodes) {
+function normalizeAdjustment(adjustment, employeeNames) {
   const { notes: _legacyNotes, ...safeAdjustment } = adjustment ?? {};
   return {
     ...safeAdjustment,
-    employeeName: memberCodes.get(safeAdjustment.employeeId) ?? "成员代号",
+    employeeName: employeeNames.get(safeAdjustment.employeeId) ?? "未知员工",
     reason: PAYROLL_ADJUSTMENT_REASONS.includes(safeAdjustment.reason) ? safeAdjustment.reason : "薪资结构调整",
   };
 }
 
-function normalizeOperationLog(log, memberCodes = new Map()) {
+function normalizeOperationLog(log, employeeNames = new Map()) {
   return (Array.isArray(log) ? log : []).flatMap((event) => {
     if (!OPERATION_TYPES.has(event?.type)) return [];
     return [{
@@ -234,7 +244,7 @@ function normalizeOperationLog(log, memberCodes = new Map()) {
       type: event.type,
       storeId: `${event?.storeId ?? ""}`.trim() || null,
       employeeId: `${event?.employeeId ?? ""}`.trim() || null,
-      memberCode: event?.employeeId ? (memberCodes.get(event.employeeId) ?? "成员代号") : null,
+      employeeName: `${event?.employeeName ?? ""}`.trim() || (event?.employeeId ? (employeeNames.get(event.employeeId) ?? "未知员工") : null),
       month: /^\d{4}-\d{2}$/.test(`${event?.month ?? ""}`) ? event.month : null,
       businessDate: /^\d{4}-\d{2}-\d{2}$/.test(`${event?.businessDate ?? ""}`) ? event.businessDate : null,
       key: `${event?.key ?? ""}`.trim() || null,
@@ -255,19 +265,26 @@ function normalizeCloseHistory(history) {
   });
 }
 
-function normalizeMonthlyRecords(monthlyRecords = {}, memberCodes = new Map()) {
+function normalizeMonthlyRecords(monthlyRecords = {}, employeeNames = new Map()) {
   return Object.fromEntries(
     Object.entries(monthlyRecords).map(([month, stores]) => [
       month,
       Object.fromEntries(
         Object.entries(stores ?? {}).map(([storeId, record]) => {
           const normalized = createOpenMonthlyStoreRecord(record);
-          const snapshot = Array.isArray(normalized.snapshot) ? normalized.snapshot.map((row) => ({
-            ...row,
-            entry: normalizeMonthlyEntry(row.entry),
-            employee: {
-              id: row.employee?.id,
-              name: memberCodes.get(row.employee?.id) ?? "成员代号",
+          const snapshot = Array.isArray(normalized.snapshot) ? normalized.snapshot.map((row) => {
+            const storedName = `${row.employee?.name ?? ""}`.trim();
+            const currentName = employeeNames.get(row.employee?.id);
+            return {
+              ...row,
+              entry: normalizeMonthlyEntry(row.entry),
+              employee: {
+                id: row.employee?.id,
+                name: !storedName || storedName.startsWith("成员代号") ? ((currentName ?? storedName) || "未知员工") : storedName,
+              phone: normalizePhone(row.employee?.phone),
+              employeeNumber: `${row.employee?.employeeNumber ?? ""}`.trim(),
+              role: `${row.employee?.role ?? ""}`.trim(),
+              hireDate: /^\d{4}-\d{2}-\d{2}$/.test(`${row.employee?.hireDate ?? ""}`) ? row.employee.hireDate : null,
               baseSalary: Number(row.employee?.baseSalary) || 0,
               overtimeRate: Number(row.employee?.overtimeRate) || 0,
               attendanceBonus: Number(row.employee?.attendanceBonus) || 0,
@@ -275,7 +292,8 @@ function normalizeMonthlyRecords(monthlyRecords = {}, memberCodes = new Map()) {
               isResigned: Boolean(row.employee?.isResigned),
               resignationDate: row.employee?.resignationDate ?? null,
             },
-          })) : null;
+          };
+        }) : null;
           return [storeId, { ...normalized, snapshot, closeHistory: normalizeCloseHistory(normalized.closeHistory) }];
         }),
       ),
@@ -693,7 +711,7 @@ function migrateLegacyWorkspace(workspace) {
 
   const rawEmployees = legacyStores.flatMap((store) => Array.isArray(store.employees) ? store.employees : []);
   const employees = rawEmployees.map(normalizeEmployee);
-  const memberCodes = new Map(employees.map((employee) => [employee.id, employee.name]));
+  const employeeNames = new Map(employees.map((employee) => [employee.id, employee.name]));
 
   return {
     version: WORKSPACE_VERSION,
@@ -705,11 +723,11 @@ function migrateLegacyWorkspace(workspace) {
       ),
     ),
     adjustments: legacyStores.flatMap((store) =>
-      (Array.isArray(store.adjustments) ? store.adjustments : []).map((record) => normalizeAdjustment({ ...record, storeId: store.id }, memberCodes)),
+      (Array.isArray(store.adjustments) ? store.adjustments : []).map((record) => normalizeAdjustment({ ...record, storeId: store.id }, employeeNames)),
     ),
     ruleHistory: [],
     operationLog: [],
-    monthlyRecords: normalizeMonthlyRecords(workspace?.monthlyRecords, memberCodes),
+    monthlyRecords: normalizeMonthlyRecords(workspace?.monthlyRecords, employeeNames),
     inventoryItems: Array.isArray(workspace?.inventoryItems) ? workspace.inventoryItems.map(normalizeInventoryItem) : [],
     inventoryMovements: Array.isArray(workspace?.inventoryMovements) ? workspace.inventoryMovements.map(normalizeInventoryMovement) : [],
     inventoryBatches: Array.isArray(workspace?.inventoryBatches) ? workspace.inventoryBatches.map(normalizeInventoryBatch) : createLegacyInventoryBatches(Array.isArray(workspace?.inventoryItems) ? workspace.inventoryItems.map(normalizeInventoryItem) : []),
@@ -733,7 +751,7 @@ export function migrateWorkspace(workspace) {
   }
 
   const employees = Array.isArray(workspace.employees) ? workspace.employees.map(normalizeEmployee) : [];
-  const memberCodes = new Map(employees.map((employee) => [employee.id, employee.name]));
+  const employeeNames = new Map(employees.map((employee) => [employee.id, employee.name]));
   const inventoryItems = Array.isArray(workspace.inventoryItems) ? workspace.inventoryItems.map(normalizeInventoryItem) : [];
   return {
     ...workspace,
@@ -744,13 +762,13 @@ export function migrateWorkspace(workspace) {
       ? workspace.assignments.map(normalizeAssignment)
       : [],
     adjustments: Array.isArray(workspace.adjustments)
-      ? workspace.adjustments.map((adjustment) => normalizeAdjustment(adjustment, memberCodes))
+      ? workspace.adjustments.map((adjustment) => normalizeAdjustment(adjustment, employeeNames))
       : [],
     ruleHistory: Array.isArray(workspace.ruleHistory)
       ? workspace.ruleHistory.map((record) => ({ ...record }))
       : [],
-    operationLog: normalizeOperationLog(workspace.operationLog, memberCodes),
-    monthlyRecords: normalizeMonthlyRecords(workspace.monthlyRecords, memberCodes),
+    operationLog: normalizeOperationLog(workspace.operationLog, employeeNames),
+    monthlyRecords: normalizeMonthlyRecords(workspace.monthlyRecords, employeeNames),
     inventoryItems,
     inventoryMovements: Array.isArray(workspace.inventoryMovements) ? workspace.inventoryMovements.map(normalizeInventoryMovement) : [],
     inventoryBatches: Array.isArray(workspace.inventoryBatches) ? workspace.inventoryBatches.map(normalizeInventoryBatch) : createLegacyInventoryBatches(inventoryItems),

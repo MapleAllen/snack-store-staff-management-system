@@ -450,7 +450,10 @@ export function buildExportRows(store, rows, exportStatus = "草稿") {
   return rows.map(({ employee, entry, breakdown, validationIssues = [] }) => ({
     工资表状态: exportStatus,
     门店: store.name,
-    成员代号: employee.name,
+    姓名: employee.name,
+    员工工号: employee.employeeNumber ?? "",
+    岗位: employee.role ?? "",
+    手机号: employee.phone ?? "",
     基础工资: employee.baseSalary,
     加班时薪: employee.overtimeRate,
     加班时长: breakdown.overtimeHours,

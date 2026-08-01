@@ -25,7 +25,7 @@ Employee management is implemented through `src/pages/EmployeesPage.jsx`, employ
 
 - `submitEmployee()` in `App.jsx` creates a new employee with `salaryConfigured: false`, zero salary components, and an assignment to the active store starting in the current month.
 - New employee flow immediately opens the initial salary adjustment modal.
-- Existing employee editing currently updates name only.
+- Employee profile editing validates required name, phone format, and employee-number uniqueness, then calls `updateEmployeeProfile()` and records an audit event.
 - Payroll salary fields are not edited directly in the employee form.
 
 **Salary setup and adjustment**
@@ -60,7 +60,7 @@ Employee-Management is currently a combination of page UI, App-level form handle
 ### App Handlers (`src/App.jsx`)
 
 - `submitEmployee(event)`
-  - Creates employees and assignments or edits employee names.
+  - Creates employees and assignments with profile fields, or edits an existing employee profile via `updateEmployeeProfile()`.
 - `submitAdjustment(event)`
   - Updates salary fields and records adjustment history.
 - `handleToggleResignation(employee, shouldResign)` and `submitResignation(event)`
@@ -87,9 +87,8 @@ Employee-Management is currently a combination of page UI, App-level form handle
 
 ## Current Limitations
 
-- Employee profiles are minimal: name and three salary components only, plus optional resignation fields.
-- No staff number, role, phone, hire date, contract status, bank information, document checklist, or notes.
-- Employee name is not globally validated for duplicates.
+- Employee profiles cover name, phone, employee number, role, and hire date plus three salary components; no contract status, bank information, document checklist, or free-text notes.
+- Employee name is not globally validated for duplicates (employee numbers are).
 - Resignation does not close or modify assignments; active payroll exclusion depends on `isResigned` filtering.
 - Rehire history is represented by clearing resignation fields, not by a formal employment lifecycle record.
 - Salary adjustment effective dates are recorded but current payroll uses current employee salary fields unless a month is closed.
@@ -97,9 +96,7 @@ Employee-Management is currently a combination of page UI, App-level form handle
 
 ## Future Directions
 
-- Add commercial employee profile fields and validation.
 - Add employment lifecycle records for hire, resignation, rehire, and status changes.
-- Move resignation and salary adjustment into `workspaceOperations.js`.
-- Add staff-number uniqueness and duplicate-name warnings.
+- Add duplicate-name warnings.
 - Add bulk import with preview and rollback.
 - Add employee detail history timeline covering assignments, salary adjustments, resignation, and payroll close participation.

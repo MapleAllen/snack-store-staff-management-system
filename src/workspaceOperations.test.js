@@ -8,6 +8,7 @@ import {
   createStore,
   restoreStore,
   transferEmployee,
+  updateEmployeeProfile,
   updatePayoutRow,
   unlockStoreMonth,
 } from "./workspaceOperations.js";
@@ -74,6 +75,60 @@ describe("employee transfer", () => {
       employeeId, targetStoreId, effectiveMonth: "2026-06", currentMonth: "2026-06",
       at: "2026-06-20T00:00:00Z", assignmentId: "assignment-new", note: "",
     })).toThrow("已月结");
+  });
+});
+
+describe("employee profile", () => {
+  it("updates name, phone, number, role and hire date with audit trail", () => {
+    const initial = createInitialWorkspace();
+    const employeeId = initial.employees[0].id;
+    const updated = updateEmployeeProfile(initial, {
+      employeeId,
+      name: " 张三 ",
+      phone: "13912345678",
+      employeeNumber: "EMP-001",
+      role: "店长",
+      hireDate: "2024-01-01",
+      id: "profile-1",
+      at: "2026-06-20T00:00:00Z",
+    });
+    const employee = updated.employees.find((item) => item.id === employeeId);
+    expect(employee.name).toBe("张三");
+    expect(employee.phone).toBe("13912345678");
+    expect(employee.employeeNumber).toBe("EMP-001");
+    expect(employee.role).toBe("店长");
+    expect(employee.hireDate).toBe("2024-01-01");
+    expect(updated.operationLog[0]).toMatchObject({ type: "employee-profile-updated", employeeId, employeeName: "张三" });
+  });
+
+  it("rejects empty names, invalid phones and duplicate employee numbers", () => {
+    const initial = createInitialWorkspace();
+    const employeeId = initial.employees[0].id;
+    const base = { employeeId, name: "张三", id: "profile-1", at: "2026-06-20T00:00:00Z" };
+    expect(() => updateEmployeeProfile(initial, { ...base, name: "   " })).toThrow("姓名不能为空");
+    expect(() => updateEmployeeProfile(initial, { ...base, phone: "123" })).toThrow("手机号格式无效");
+    expect(() => updateEmployeeProfile(initial, { ...base, employeeNumber: initial.employees[1].employeeNumber })).toThrow("工号不能重复");
+    expect(() => updateEmployeeProfile(initial, { ...base, employeeNumber: initial.employees[1].employeeNumber.toLowerCase() })).toThrow("工号不能重复");
+  });
+
+  it("keeps identity fields when clearing optional profile fields", () => {
+    const initial = createInitialWorkspace();
+    const employeeId = initial.employees[0].id;
+    const updated = updateEmployeeProfile(initial, {
+      employeeId,
+      name: initial.employees[0].name,
+      phone: "",
+      employeeNumber: "",
+      role: "",
+      hireDate: "",
+      id: "profile-2",
+      at: "2026-06-20T00:00:00Z",
+    });
+    const employee = updated.employees.find((item) => item.id === employeeId);
+    expect(employee.phone).toBe("");
+    expect(employee.employeeNumber).toBe("");
+    expect(employee.role).toBe("");
+    expect(employee.hireDate).toBeNull();
   });
 });
 

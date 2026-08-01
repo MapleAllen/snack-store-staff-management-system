@@ -1,6 +1,5 @@
 import {
   ASSIGNMENT_REASONS,
-  createAnonymousMemberCode,
   createOpenMonthlyStoreRecord,
   EMPLOYEE_FIELDS,
   PAYOUT_METHODS,
@@ -33,9 +32,35 @@ function assertActiveEmployee(workspace, employeeId) {
   return employee;
 }
 
-function getAnonymousMemberCode(workspace, employeeId) {
-  const index = (workspace?.employees ?? []).findIndex((employee) => employee.id === employeeId);
-  return index >= 0 ? createAnonymousMemberCode(index + 1) : "成员代号";
+function getEmployeeName(workspace, employeeId) {
+  return (workspace?.employees ?? []).find((employee) => employee.id === employeeId)?.name ?? "未知员工";
+}
+
+export function updateEmployeeProfile(workspace, { employeeId, name, phone, employeeNumber, role, hireDate, id, at }) {
+  assertActiveEmployee(workspace, employeeId);
+  const trimmedName = `${name ?? ""}`.trim();
+  if (!trimmedName) throw new Error("员工姓名不能为空");
+  if (trimmedName.length > 40) throw new Error("员工姓名过长");
+  const trimmedPhone = `${phone ?? ""}`.trim();
+  if (trimmedPhone && !/^1[3-9]\d{9}$/.test(trimmedPhone)) throw new Error("手机号格式无效");
+  const trimmedNumber = `${employeeNumber ?? ""}`.trim();
+  if (trimmedNumber && workspace.employees.some((item) => item.id !== employeeId && `${item.employeeNumber ?? ""}`.toLowerCase() === trimmedNumber.toLowerCase())) {
+    throw new Error("员工工号不能重复");
+  }
+  const trimmedRole = `${role ?? ""}`.trim();
+  if (trimmedRole.length > 20) throw new Error("岗位名称过长");
+  const nextHireDate = /^\d{4}-\d{2}-\d{2}$/.test(`${hireDate ?? ""}`) ? hireDate : null;
+  return appendOperationLog({
+    ...workspace,
+    employees: workspace.employees.map((item) => item.id === employeeId ? {
+      ...item,
+      name: trimmedName,
+      phone: trimmedPhone,
+      employeeNumber: trimmedNumber,
+      role: trimmedRole,
+      hireDate: nextHireDate,
+    } : item),
+  }, { id, type: "employee-profile-updated", employeeId, employeeName: trimmedName, at: at ?? null });
 }
 
 export function updateStoreConfig(workspace, { storeId, key, value, id, at }) {
@@ -85,24 +110,24 @@ export function recordSalaryAdjustment(workspace, { employeeId, storeId, values,
       date,
       reason,
     }, ...(workspace.adjustments ?? [])],
-  }, { id, type: "salary-adjusted", storeId, employeeId, memberCode: getAnonymousMemberCode(workspace, employeeId), at: date });
+  }, { id, type: "salary-adjusted", storeId, employeeId, employeeName: employee.name, at: date });
 }
 
 export function resignEmployee(workspace, { employeeId, resignationDate, eventId }) {
-  assertActiveEmployee(workspace, employeeId);
+  const employee = assertActiveEmployee(workspace, employeeId);
   assertIsoDate(resignationDate, "离职日期");
   return appendOperationLog({
     ...workspace,
     employees: workspace.employees.map((item) => item.id === employeeId ? { ...item, isResigned: true, resignationDate } : item),
-  }, { id: eventId, type: "employee-resigned", employeeId, memberCode: getAnonymousMemberCode(workspace, employeeId), businessDate: resignationDate, at: resignationDate });
+  }, { id: eventId, type: "employee-resigned", employeeId, employeeName: employee.name, businessDate: resignationDate, at: resignationDate });
 }
 
 export function restoreEmployee(workspace, { employeeId, eventId, at }) {
-  assertActiveEmployee(workspace, employeeId);
+  const employee = assertActiveEmployee(workspace, employeeId);
   return appendOperationLog({
     ...workspace,
     employees: workspace.employees.map((item) => item.id === employeeId ? { ...item, isResigned: false, resignationDate: null } : item),
-  }, { id: eventId, type: "employee-restored", employeeId, memberCode: getAnonymousMemberCode(workspace, employeeId), at: at ?? null });
+  }, { id: eventId, type: "employee-restored", employeeId, employeeName: employee.name, at: at ?? null });
 }
 
 export function createStore(workspace, { sourceStoreId, name, id, at }) {
@@ -194,7 +219,7 @@ export function transferEmployee(workspace, { employeeId, targetStoreId, effecti
   const assignmentReason = ASSIGNMENT_REASONS.includes(reason) ? reason : "排班平衡";
   assignments.push({ id: assignmentId, employeeId, storeId: targetStoreId, startMonth: effectiveMonth, endMonth: null, createdAt: at, reason: assignmentReason });
   return appendOperationLog({ ...workspace, assignments, monthlyRecords }, {
-    id: assignmentId, type: "employee-transferred", employeeId, memberCode: getAnonymousMemberCode(workspace, employeeId), storeId: targetStoreId, month: effectiveMonth, at,
+    id: assignmentId, type: "employee-transferred", employeeId, employeeName: getEmployeeName(workspace, employeeId), storeId: targetStoreId, month: effectiveMonth, at,
   });
 }
 

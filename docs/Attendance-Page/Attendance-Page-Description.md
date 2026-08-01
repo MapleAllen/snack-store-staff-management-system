@@ -6,7 +6,7 @@ Attendance-Page
 
 ## Purpose
 
-为匿名成员录入与工资相关的加班、请假、稽核和备注，并明确确认每条月度记录。
+为员工录入与工资相关的加班、请假、稽核和备注，并明确确认每条月度记录。
 
 ## Current Implementation
 
@@ -15,7 +15,7 @@ Attendance-Page
 ### Capabilities
 
 - 输入加班、请假、夜班、稽核和备注。
-- 批量操作和逐成员确认。
+- 批量操作和逐员工确认。
 - 跳转至工资页继续核对。
 
 ## Architecture
@@ -41,7 +41,7 @@ Attendance-Page
 
 ## Future Directions
 
-- Add 匿名班次模板。
+- Add 班次模板。
 - Add 考勤文件导入预览。
 
 ## Privacy Safeguards (v12)

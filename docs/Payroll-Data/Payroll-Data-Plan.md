@@ -62,21 +62,20 @@ Remaining features:
 - Add migration dry-run support for backup import preview.
 - Add fixture tests for every supported historical workspace shape.
 
-## Phase 4: Commercial Employee and Store Schema — NOT STARTED
+## Phase 4: Commercial Employee and Store Schema — DONE
 
-Status: **Not Started**
+Status: **Done**
 
 Goals:
 
-- Extend the workspace model for real payroll operations without introducing cloud sync or personal-information collection.
+- Extend the workspace model for real payroll operations without cloud sync or identity-document collection.
 
-Remaining features:
+Completed work:
 
-- Keep member records limited to anonymous member codes, stable internal IDs, payroll state, salary components, and lifecycle data.
-- Add only non-identifying store metadata such as generic business label, operating status notes, archive reason, and optional internal code.
-- Add formal employment lifecycle fields separate from simple `isResigned` and `resignationDate`.
-- Define which fields are included in payroll exports and which remain internal profile data.
-- Remove legacy names, contact details, bank data, identity/document data, and personal free text while keeping old workspaces valid.
+- Employee records carry name, phone, employee number, role, and hire date with normalized migration defaults.
+- Store metadata remains generic with operating status and archive state.
+- Employee-number uniqueness and phone format are enforced by `updateEmployeeProfile()`.
+- Payroll exports include name, employee number, role, and phone; salary components still flow through adjustment records only.
 
 ## Phase 5: Workspace Metadata and Audit Support — NOT STARTED
 

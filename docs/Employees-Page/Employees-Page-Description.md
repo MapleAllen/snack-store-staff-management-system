@@ -6,18 +6,19 @@ Employees-Page
 
 ## Purpose
 
-管理匿名岗位成员的薪资配置、门店归属、调店记录和在岗状态，而不保存姓名、联系方式或证件信息。
+管理员工的姓名、联系方式（手机号、工号、岗位、入职日期）、薪资配置、门店归属、调店记录和在岗状态，并支持随时编辑员工资料。
 
 ## Current Implementation
 
-`src/pages/EmployeesPage.jsx` 展示系统生成的成员代号和稳定系统编号。新增操作由 `App.jsx` 自动生成匿名代号；`migrateWorkspace()` 将旧工作区的成员展示名替换为匿名代号，同时保留工资和归属 ID 关联。
+`src/pages/EmployeesPage.jsx` 展示员工姓名、工号、手机号、岗位与稳定系统编号。新增与编辑操作由 `App.jsx` 负责：新增时录入姓名（必填）、手机号、工号、岗位与入职日期；编辑资料调用 `updateEmployeeProfile()` 校验并写入员工字段，同时记录审计事件。`migrateWorkspace()` 保留旧工作区的成员展示名与工资、归属 ID 关联，不再强制改写为匿名代号。
 
 ### Capabilities
 
-- 以成员代号和系统编号搜索、筛选在岗、待设薪资和历史成员。
-- 创建匿名岗位成员并进入初始薪资设置。
-- 支持调店、离岗、恢复在岗和履历查看。
-- 展示薪资组件和调薪记录，不收集个人档案字段。
+- 以姓名、工号、手机号或系统编号搜索、筛选在岗、待设薪资和历史员工。
+- 新增员工并录入真实身份字段，进入初始薪资设置。
+- 编辑员工资料（姓名、手机号、工号、岗位、入职日期），工号全工作区唯一。
+- 支持调店、离岗、恢复在岗和资料与履历查看。
+- 展示薪资组件和调薪记录。
 
 ## Architecture
 
@@ -26,27 +27,22 @@ Employees-Page
 ### UI (`src/pages/`)
 
 - `EmployeesPage.jsx`
-  - 表格、筛选器和匿名成员履历抽屉。
+  - 表格、筛选器、编辑资料入口和员工履历抽屉。
 
 ### Integration Points
 
 - `src/payrollData.js`
-  - `createAnonymousMemberCode()` 和 `migrateWorkspace()`。
+  - `migrateWorkspace()` 与员工字段归一化。
 - `src/payrollLogic.js`
-  - 成员归属与履历查询函数。
+  - 员工归属与履历查询函数。
 - `src/workspaceOperations.js`
-  - `transferEmployee()`。
+  - `updateEmployeeProfile()`、`transferEmployee()`。
 
 ## Current Limitations
 
-- 成员代号不可自定义。
 - 离岗仍使用日期记录，未提供排班替班功能。
 
 ## Future Directions
 
-- Add 按岗位类别而非身份信息统计人力覆盖。
-- Add 匿名班次模板与缺岗预警。
-
-## Privacy Safeguards (v12)
-
-调店履历和薪资调整履历只保留预设业务原因。迁移会丢弃旧的调店备注与调薪备注，并把历史成员显示名标准化为匿名成员代号。
+- Add 按岗位类别统计人力覆盖。
+- Add 班次模板与缺岗预警（如需）。

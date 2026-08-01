@@ -27,10 +27,11 @@ const OPERATION_LABELS = {
   "store-archived": "门店已停用",
   "store-restored": "门店已恢复营业",
   "salary-adjusted": "薪资组件已调整",
-  "employee-resigned": "成员已离职",
-  "employee-restored": "成员已恢复在职",
+  "employee-resigned": "员工已离职",
+  "employee-restored": "员工已恢复在职",
   "rule-updated": "算薪规则已更新",
-  "employee-transferred": "成员已调店",
+  "employee-transferred": "员工已调店",
+  "employee-profile-updated": "员工资料已更新",
   "payroll-closed": "工资月结已封账",
   "payroll-unlocked": "工资月结已解锁",
   "payout-created": "发薪批次已创建",
@@ -315,7 +316,7 @@ export function SettingsPage({
           <Card title="本地操作审计" style={{ borderRadius: 8 }}>
             {operationLog.length === 0 ? <Text type="secondary">尚未记录关键操作。</Text> : <Timeline items={operationLog.slice(0, 20).map((event) => ({
               color: event.type === "payroll-unlocked" ? "orange" : "blue",
-              children: <div><Text strong>{OPERATION_LABELS[event.type] ?? "关键操作"}</Text>{event.memberCode && <Text type="secondary"> · {event.memberCode}</Text>}{event.month && <Text type="secondary"> · {event.month}</Text>}{event.businessDate && <Text type="secondary"> · {event.businessDate}</Text>}<br /><Text type="secondary" style={{ fontSize: 12 }}>{event.at ? new Date(event.at).toLocaleString("zh-CN") : "历史记录"}</Text></div>,
+              children: <div><Text strong>{OPERATION_LABELS[event.type] ?? "关键操作"}</Text>{event.employeeName && <Text type="secondary"> · {event.employeeName}</Text>}{event.month && <Text type="secondary"> · {event.month}</Text>}{event.businessDate && <Text type="secondary"> · {event.businessDate}</Text>}<br /><Text type="secondary" style={{ fontSize: 12 }}>{event.at ? new Date(event.at).toLocaleString("zh-CN") : "历史记录"}</Text></div>,
             }))} />}
           </Card>
           {/* 应用访问保护锁 */}

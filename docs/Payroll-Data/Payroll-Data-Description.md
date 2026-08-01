@@ -119,7 +119,7 @@ Payroll-Data is a single-file data contract and migration module. It is intentio
 
 - Workspace migration is still a broad normalization function rather than an explicit version-by-version migration chain.
 - Structural validation is split: `shared/backup-format.js` validates basic top-level shape, while `migrateWorkspace()` normalizes deeper structures.
-- Employee profiles only contain payroll-critical fields; there is no formal staff number, phone, ID, hire date, role, bank account, contract status, or document attachment model.
+- Employee profiles store payroll-critical fields plus profile fields: name, phone, employee number, role, and hire date; there is no bank account, contract status, or document attachment model.
 - Salary component mutation is enforced by UI flow and adjustment records in `App.jsx`, not by the data module itself.
 - Legacy migration depends on template legacy ID mappings for known old stores; unknown legacy stores are carried forward with default config normalization only.
 - `mergeWorkspaceWithTemplates` is a compatibility alias and does not add behavior beyond `migrateWorkspace()`.
