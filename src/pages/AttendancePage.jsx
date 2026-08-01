@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Card, Table, InputNumber, Input, Button, Tag, Row, Col, Alert, Space, Tooltip, Typography, Switch, Dropdown, Modal } from "antd";
+import { Card, Table, InputNumber, Button, Tag, Row, Col, Alert, Space, Tooltip, Typography, Switch, Dropdown, Modal, Select } from "antd";
 import {
   CheckCircleOutlined,
   ArrowRightOutlined,
@@ -11,6 +11,7 @@ import {
 import { PageHeader } from "../components/PageHeader.jsx";
 import { StatCard } from "../components/StatCard.jsx";
 import { getPayrollIssueMessage } from "../payrollLogic.js";
+import { ATTENDANCE_REASONS } from "../payrollData.js";
 
 const { Text } = Typography;
 
@@ -37,7 +38,7 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
 
   const columns = [
     {
-      title: "姓名",
+      title: "成员代号",
       dataIndex: ["employee", "name"],
       key: "name",
       width: 130,
@@ -141,14 +142,17 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
       ),
     },
     {
-      title: "考勤备注",
-      key: "note",
+      title: "考勤业务原因",
+      key: "attendanceReason",
       render: (_, record) => (
-        <Input
+        <Select
           disabled={isLocked}
-          value={record.entry.note}
-          placeholder="添加考勤备注"
-          onChange={(e) => patchEntry(record.employee.id, { note: e.target.value })}
+          allowClear
+          value={record.entry.attendanceReason || undefined}
+          placeholder="选择标准原因"
+          options={ATTENDANCE_REASONS.map((reason) => ({ value: reason, label: reason }))}
+          onChange={(attendanceReason) => patchEntry(record.employee.id, { attendanceReason: attendanceReason ?? "" })}
+          style={{ width: "100%" }}
         />
       ),
     },

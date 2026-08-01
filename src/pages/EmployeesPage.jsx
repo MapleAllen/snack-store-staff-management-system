@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Card, Table, Tag, Button, Space, Input, Row, Col, Typography, Avatar, Popconfirm, Drawer, Descriptions, Segmented, Timeline } from "antd";
 import {
   PlusOutlined,
-  EditOutlined,
   SwapOutlined,
   UserDeleteOutlined,
   UserAddOutlined,
@@ -14,7 +13,7 @@ import { formatCurrency, getAssignmentAtMonth, getEmployeeAssignments, getEmploy
 
 const { Text, Title, Paragraph } = Typography;
 
-export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit, onToggleResignation, onTransfer }) {
+export function EmployeesPage({ workspace, store, currentMonth, onCreate, onToggleResignation, onTransfer }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [historyDrawerEmployee, setHistoryDrawerEmployee] = useState(null);
@@ -50,7 +49,7 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
 
   const columns = [
     {
-      title: "员工信息",
+      title: "成员代号",
       dataIndex: ["employee", "name"],
       key: "name",
       render: (_, record) => (
@@ -63,7 +62,7 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
           </Avatar>
           <div>
             <Text strong>{record.employee.name}</Text>
-            <Text type="secondary" style={{ display: "block", fontSize: 12 }}>工号：{record.employee.id}</Text>
+            <Text type="secondary" style={{ display: "block", fontSize: 12 }}>系统编号：{record.employee.id.slice(-8)}</Text>
           </div>
         </Space>
       ),
@@ -93,7 +92,7 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
         }
         return (
           <Space direction="vertical" size={2}>
-            <Tag color="default">历史员工</Tag>
+            <Tag color="default">历史成员</Tag>
             {plannedIn && (
               <Text type="success" style={{ fontSize: 12 }}>
                 将于 {plannedIn.startMonth} 调入本店
@@ -132,10 +131,7 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
         return (
           <Space wrap size="small">
             <Button size="small" icon={<HistoryOutlined />} onClick={() => setHistoryDrawerEmployee(employee)}>
-              档案履历
-            </Button>
-            <Button size="small" icon={<EditOutlined />} onClick={() => onEdit(employee)}>
-              改名
+              代号与履历
             </Button>
             {currentHere && !employee.isResigned && (
               <Button size="small" icon={<SwapOutlined />} onClick={() => onTransfer(employee)}>
@@ -176,12 +172,12 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
       <PageHeader
-        eyebrow="员工管理"
-        title={`${store.name} 员工档案`}
-        description="维护门店员工基本信息、薪资组件、调店履历与在职状态。"
+        eyebrow="成员与工资"
+        title={`${store.name} 岗位成员`}
+        description="使用系统生成的匿名成员代号管理工资、调店和在职状态；本页不保存姓名或联系方式。"
         actions={
           <Button type="primary" size="large" icon={<PlusOutlined />} onClick={onCreate}>
-            新增员工
+            新增岗位成员
           </Button>
         }
       />
@@ -195,16 +191,16 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
               value={statusFilter}
               onChange={setStatusFilter}
               options={[
-                { label: `全部员工 (${cards.length})`, value: "all" },
-                { label: `在岗员工 (${activeCount})`, value: "active" },
+                { label: `全部成员 (${cards.length})`, value: "all" },
+                { label: `在岗成员 (${activeCount})`, value: "active" },
                 { label: `待设薪资 (${pendingSalaryCount})`, value: "pending" },
-                { label: `历史与离职 (${historyCount})`, value: "history" },
+                { label: `历史与离岗 (${historyCount})`, value: "history" },
               ]}
             />
           </Col>
           <Col>
             <Input
-              placeholder="搜索员工姓名或工号"
+              placeholder="搜索成员代号或系统编号"
               prefix={<SearchOutlined />}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -217,7 +213,7 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
 
       {/* 瘦身后的全宽员工主表 */}
       <Card
-        title={`员工档案列表 (当前显示 ${visibleCards.length} 位)`}
+        title={`岗位成员列表 (当前显示 ${visibleCards.length} 位)`}
         style={{ borderRadius: 8 }}
       >
         <Table
@@ -229,9 +225,9 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
         />
       </Card>
 
-      {/* 员工档案个人履历 Drawer */}
+      {/* 匿名成员履历 Drawer */}
       <Drawer
-        title={historyDrawerEmployee ? `${historyDrawerEmployee.name} - 档案个人履历` : "员工履历"}
+        title={historyDrawerEmployee ? `${historyDrawerEmployee.name} - 岗位履历` : "成员履历"}
         placement="right"
         width={500}
         onClose={() => setHistoryDrawerEmployee(null)}
@@ -240,8 +236,8 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
         {historyDrawerEmployee && (
           <Space direction="vertical" size="large" style={{ width: "100%" }}>
             <Descriptions title="基本薪资组件" column={1} bordered size="small">
-              <Descriptions.Item label="员工姓名">{historyDrawerEmployee.name}</Descriptions.Item>
-              <Descriptions.Item label="工号">{historyDrawerEmployee.id}</Descriptions.Item>
+              <Descriptions.Item label="成员代号">{historyDrawerEmployee.name}</Descriptions.Item>
+              <Descriptions.Item label="系统编号">{historyDrawerEmployee.id.slice(-8)}</Descriptions.Item>
               <Descriptions.Item label="基础工资">{formatCurrency(historyDrawerEmployee.baseSalary)}</Descriptions.Item>
               <Descriptions.Item label="加班时薪">{historyDrawerEmployee.overtimeRate} 元/小时</Descriptions.Item>
               <Descriptions.Item label="全勤奖金">{formatCurrency(historyDrawerEmployee.attendanceBonus)}</Descriptions.Item>
@@ -262,7 +258,7 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
                       <Text strong>{storeMap.get(a.storeId)?.name ?? a.storeId}</Text>
                       <br />
                       <Text type="secondary" style={{ fontSize: 12 }}>
-                        {a.startMonth} 至 {a.endMonth ?? "现在"} · {a.note || "正常任职"}
+                        {a.startMonth} 至 {a.endMonth ?? "现在"} · {a.reason || "常规门店分配"}
                       </Text>
                     </div>
                   ),
@@ -271,9 +267,9 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
             </div>
 
             <div>
-              <Title level={5}>个人调薪变更历史</Title>
+              <Title level={5}>调薪变更历史</Title>
               {drawerAdjustments.length === 0 ? (
-                <Text type="secondary">暂无个人调薪记录</Text>
+                <Text type="secondary">暂无调薪记录</Text>
               ) : (
                 <Timeline
                   items={drawerAdjustments.map((record) => ({
@@ -285,9 +281,9 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
                         <Text type="secondary" style={{ fontSize: 12 }}>
                           {record.date} · {record.previousValue} → {record.newValue}
                         </Text>
-                        {record.notes && (
+                        {record.reason && (
                           <Paragraph type="secondary" style={{ fontSize: 12, margin: "2px 0 0 0" }}>
-                            {record.notes}
+                            {record.reason}
                           </Paragraph>
                         )}
                       </div>

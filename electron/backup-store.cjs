@@ -45,7 +45,16 @@ function createBackupStore({ baseDir, maxBackups = 10, now = () => new Date() })
           size: stat.size,
         });
       } catch {
-        // Damaged files are ignored in the list and will fail explicitly if selected by id.
+        const stat = await fs.stat(path.join(backupDir, entry.name));
+        backups.push({
+          id: entry.name,
+          createdAt: stat.mtime.toISOString(),
+          reason: "damaged",
+          reasonLabel: "已损坏恢复点",
+          size: stat.size,
+          isDamaged: true,
+          error: "文件无法读取或未通过结构校验，不能用于恢复。",
+        });
       }
     }
     return backups.sort((a, b) => `${b.createdAt}`.localeCompare(`${a.createdAt}`));

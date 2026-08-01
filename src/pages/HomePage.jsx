@@ -1,7 +1,6 @@
 import { Card, Row, Col, Button, Tag, Alert, Space, Typography, List } from "antd";
 import {
   CheckCircleOutlined,
-  WarningOutlined,
   ArrowRightOutlined,
   ShopOutlined,
   ArrowUpOutlined,
@@ -24,7 +23,7 @@ function getPreviousMonthStr(monthStr) {
   return `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`;
 }
 
-export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) {
+export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore, onSelectEmployee, openAdjustmentModal, onNavigateToEmployee }) {
   const readiness = getPayrollMonthCloseReadiness(workspace, activeMonth);
   const previousMonthStr = getPreviousMonthStr(activeMonth);
   const prevReadiness = getPayrollMonthCloseReadiness(workspace, previousMonthStr);
@@ -52,29 +51,44 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) 
   const nextReady = readyStores[0];
 
   const recommendedAction = totalUnconfigured
-    ? { label: "补充员工薪资设置", hint: `尚有 ${totalUnconfigured} 位员工需先完成薪资组件录入`, storeId: nextUnconfigured?.storeId }
+    ? { label: "补充员工薪资设置", hint: `尚有 ${totalUnconfigured} 位员工需先完成薪资组件录入`, storeId: nextUnconfigured?.storeId, employeeId: nextUnconfigured?.blockers?.[0]?.employeeId, targetPage: "payroll", isSalaryPending: true }
     : totalInvalid
-      ? { label: "修正考勤输入错误", hint: `存在 ${totalInvalid} 条异常考勤数据需优先更正`, storeId: nextInvalid?.storeId }
+      ? { label: "修正考勤输入错误", hint: `存在 ${totalInvalid} 条异常考勤数据需优先更正`, storeId: nextInvalid?.storeId, employeeId: nextInvalid?.blockers?.[0]?.employeeId, targetPage: "attendance" }
       : totalPending
-        ? { label: "确认员工考勤发薪明细", hint: `仍有 ${totalPending} 位员工等待录入确认完成`, storeId: nextPending?.storeId }
+        ? { label: "确认员工考勤发薪明细", hint: `仍有 ${totalPending} 位员工等待录入确认完成`, storeId: nextPending?.storeId, employeeId: nextPending?.blockers?.[0]?.employeeId, targetPage: "payroll" }
         : totalExceptions
-          ? { label: "复核请假与调整变动", hint: `${totalExceptions} 位员工包含请假扣分或特殊调薪`, storeId: nextIssue?.storeId }
+          ? { label: "复核请假与调整变动", hint: `${totalExceptions} 位员工包含请假扣分或特殊调薪`, storeId: nextIssue?.storeId, employeeId: nextIssue?.reviews?.[0]?.employeeId ?? nextIssue?.blockers?.[0]?.employeeId, targetPage: "payroll" }
           : readyStores.length
-            ? { label: "执行门店月结封账", hint: `${readyStores.length} 家门店数据核对无误，可直接封账`, storeId: nextReady?.storeId }
-            : { label: "查看月结工资报表", hint: `全店 ${closedStores} 家门店已完成本月月结`, storeId: storeSummaries[0]?.storeId };
+            ? { label: "执行门店月结封账", hint: `${readyStores.length} 家门店数据核对无误，可直接封账`, storeId: nextReady?.storeId, targetPage: "payroll" }
+            : { label: "查看月结工资报表", hint: `全店 ${closedStores} 家门店已完成本月月结`, storeId: storeSummaries[0]?.storeId, targetPage: "reports" };
 
   const priorityRows = storeSummaries
-    .flatMap((item) => item.blockers.map((blocker) => ({
-      storeId: item.storeId,
-      storeName: item.storeName,
-      employeeId: blocker.employeeId,
-      employeeName: blocker.employeeName,
-      reason: getPayrollIssueMessage(blocker.issues[0]),
-    })));
+    .flatMap((item) => item.blockers.map((blocker) => {
+      const firstIssue = blocker.issues[0];
+      const isSalaryPending = firstIssue?.code === "PAYROLL_EMPLOYEE_SALARY_PENDING" || firstIssue?.code === "CLOSE_EMPLOYEE_SALARY_PENDING";
+      const isAttendanceError = firstIssue?.code?.includes("LEAVE") || firstIssue?.code?.includes("ATTENDANCE");
+      return {
+        storeId: item.storeId,
+        storeName: item.storeName,
+        employeeId: blocker.employeeId,
+        employeeName: blocker.employeeName,
+        reason: getPayrollIssueMessage(firstIssue),
+        isSalaryPending,
+        targetPage: isAttendanceError ? "attendance" : "payroll",
+      };
+    }));
 
-  function goToPayroll(storeId) {
-    if (storeId) onSelectStore(storeId);
-    onNavigate("payroll");
+  function handleGoTo(storeId, employeeId, targetPage = "payroll", isSalaryPending = false) {
+    if (onNavigateToEmployee) {
+      onNavigateToEmployee(storeId, employeeId, targetPage, isSalaryPending ? "openAdjustment" : null);
+    } else {
+      if (storeId) onSelectStore(storeId);
+      if (employeeId && onSelectEmployee) onSelectEmployee(employeeId);
+      onNavigate(targetPage);
+      if (isSalaryPending && openAdjustmentModal && employeeId) {
+        openAdjustmentModal(employeeId);
+      }
+    }
   }
 
   return (
@@ -92,7 +106,7 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) 
         <Row gutter={[24, 24]} align="middle">
           <Col xs={24} lg={13}>
             <Tag color="blue" style={{ marginBottom: 12, fontSize: 13, padding: "2px 10px" }}>
-              经营指挥台 · {activeMonth}
+              工资管理指挥台 · {activeMonth}
             </Tag>
             <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 14, marginBottom: 4 }}>
               本月预计实发总额
@@ -125,7 +139,7 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) 
                 padding: "0 28px",
                 borderRadius: 8,
               }}
-              onClick={() => goToPayroll(recommendedAction.storeId)}
+              onClick={() => handleGoTo(recommendedAction.storeId, recommendedAction.employeeId, recommendedAction.targetPage, recommendedAction.isSalaryPending)}
             >
               下一步：{recommendedAction.label} <ArrowRightOutlined />
             </Button>
@@ -190,7 +204,10 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) 
                     type="primary"
                     danger
                     size="small"
-                    onClick={() => goToPayroll(item.storeId)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleGoTo(item.storeId, item.employeeId, item.targetPage, item.isSalaryPending);
+                    }}
                   >
                     去处理
                   </Button>,
@@ -258,7 +275,7 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore }) 
                 <Card
                   hoverable
                   size="small"
-                  onClick={() => goToPayroll(item.storeId)}
+                  onClick={() => handleGoTo(item.storeId, null, "payroll")}
                   style={{ borderRadius: 8, cursor: "pointer", transition: "all 0.2s" }}
                   title={
                     <Space>
