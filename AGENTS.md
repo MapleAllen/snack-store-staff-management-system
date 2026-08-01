@@ -19,5 +19,5 @@ Preserve the current desktop-first split payroll workspace and its mobile card l
 - Distinguish estimated, confirmed, and closed totals; open-month exports are drafts.
 - New employees remain salary-pending until all salary components are recorded.
 - Desktop recovery points are created at daily startup, before restore, and after payroll close.
-- Data is local and unencrypted. Do not add cloud sync or auto-update without an explicit product decision.
+- Data is local and unencrypted. The desktop app checks GitHub Releases for newer versions and prompts the user to download the installer; it never installs silently or uploads business data. Do not add cloud sync, silent installs, or other update mechanisms without an explicit product decision.
 - Public releases are source-only until a signed Windows channel and real-device regression process exist.

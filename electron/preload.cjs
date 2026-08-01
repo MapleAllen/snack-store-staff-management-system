@@ -14,4 +14,7 @@ contextBridge.exposeInMainWorld("payrollDesktop", Object.freeze({
   unlock: (pin) => ipcRenderer.invoke("lock:unlock", pin),
   lock: () => ipcRenderer.invoke("lock:lock"),
   clearPin: (pin) => ipcRenderer.invoke("lock:clear-pin", pin),
+
+  checkForUpdates: () => ipcRenderer.invoke("update:check"),
+  openUpdateDownload: (assetUrl) => ipcRenderer.invoke("update:open-download", assetUrl),
 }));

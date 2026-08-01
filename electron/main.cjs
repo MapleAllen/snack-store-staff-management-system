@@ -1,11 +1,14 @@
-const { app, BrowserWindow, ipcMain, session } = require("electron");
+const { app, BrowserWindow, ipcMain, session, shell } = require("electron");
 const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { createBackupStore } = require("./backup-store.cjs");
 const { createWorkspaceStore } = require("./workspace-store.cjs");
+const { buildUpdateCheckResult } = require("./update-check.cjs");
 
 const APP_TITLE = "门店工资助手";
+const UPDATE_REPOSITORY = "MapleAllen/snack-store-staff-management-system";
+const UPDATE_CHECK_TIMEOUT_MS = 8_000;
 let backupStore;
 let workspaceStore;
 
@@ -124,6 +127,37 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("workspace:status", () => workspaceStore.getStatus());
+
+  ipcMain.handle("update:check", async () => {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), UPDATE_CHECK_TIMEOUT_MS);
+      let response;
+      try {
+        response = await fetch(`https://api.github.com/repos/${UPDATE_REPOSITORY}/releases/latest`, {
+          headers: {
+            Accept: "application/vnd.github+json",
+            "User-Agent": APP_TITLE,
+          },
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+      if (!response.ok) throw new Error(`版本检查失败 (${response.status})`);
+      return buildUpdateCheckResult(app.getVersion(), await response.json());
+    } catch (error) {
+      return { status: "error", message: error?.message ?? "版本检查失败" };
+    }
+  });
+
+  ipcMain.handle("update:open-download", (_event, assetUrl) => {
+    if (typeof assetUrl !== "string" || !/^https:\/\//.test(assetUrl)) {
+      throw new Error("下载地址无效");
+    }
+    shell.openExternal(assetUrl);
+    return { success: true };
+  });
 
   ipcMain.handle("lock:status", () => ({
     locked: lockPinHash !== null,
