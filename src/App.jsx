@@ -65,9 +65,11 @@ import {
   Space,
   Typography,
   Alert,
-  ConfigProvider,
   Drawer,
   Grid,
+  Input,
+  message,
+  Spin,
 } from "antd";
 import {
   HomeOutlined,
@@ -178,7 +180,11 @@ export function App() {
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
 
-  const [notice, setNotice] = useState("");
+  const [noticeApi, noticeContextHolder] = message.useMessage();
+
+  function setNotice(content, type = "success") {
+    noticeApi.open({ type, content });
+  }
   const [employeeModal, setEmployeeModal] = useState(null);
   const [adjustmentModal, setAdjustmentModal] = useState(null);
   const [resignationModal, setResignationModal] = useState(null);
@@ -237,14 +243,14 @@ export function App() {
       if (cancelled) return;
       if (result.status === "error") {
         setSaveState({ status: "error", savedAt: null });
-        setNotice("自动保存失败，请立即导出数据备份");
+        setNotice("自动保存失败，请立即导出数据备份", "error");
       } else {
         setSaveState({ status: "saved", savedAt: result.savedAt ?? new Date().toISOString() });
       }
     }).catch(() => {
       if (!cancelled) {
         setSaveState({ status: "error", savedAt: null });
-        setNotice("自动保存失败，请立即导出数据备份");
+        setNotice("自动保存失败，请立即导出数据备份", "error");
       }
     });
     return () => { cancelled = true; };
@@ -256,7 +262,7 @@ export function App() {
     desktopApi.createBackup(makeBackupPayload(loadedWorkspace), BACKUP_REASONS.DAILY_STARTUP)
       .then(() => desktopApi.listBackups())
       .then((backups) => { if (!cancelled) setAutoBackups(backups); })
-      .catch(() => { if (!cancelled) setNotice("自动恢复点创建失败，请导出手动备份"); });
+      .catch(() => { if (!cancelled) setNotice("自动恢复点创建失败，请导出手动备份", "error"); });
     return () => { cancelled = true; };
   }, [desktopApi, loadedWorkspace]);
 
@@ -268,12 +274,6 @@ export function App() {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [desktopApi, loadedWorkspace]);
-
-  useEffect(() => {
-    if (!notice) return undefined;
-    const timer = window.setTimeout(() => setNotice(""), 2600);
-    return () => window.clearTimeout(timer);
-  }, [notice]);
 
   const activeStores = workspace.stores.filter((store) => store.status === "active");
   const activeStore = activeStores.find((store) => store.id === activeStoreId) ?? activeStores[0];
@@ -318,7 +318,7 @@ export function App() {
       await refreshAutoBackups();
       return result;
     } catch {
-      setNotice("自动恢复点创建失败，请导出手动备份");
+      setNotice("自动恢复点创建失败，请导出手动备份", "error");
       return null;
     } finally {
       setAutoBackupBusy(false);
@@ -342,7 +342,7 @@ export function App() {
 
   function patchMonthlyEntry(employeeId, patch) {
     if (!activeStore || isLocked) {
-      setNotice("本月工资已月结，请先解锁");
+      setNotice("本月工资已月结，请先解锁", "warning");
       return;
     }
     updateMonthlyStore(activeMonth, activeStore.id, (storeBucket) => {
@@ -365,7 +365,7 @@ export function App() {
   function toggleEntryComplete(employeeId, complete) {
     const row = payrollRows.find((item) => item.employee.id === employeeId);
     if (complete && row?.validationIssues?.length) {
-      setNotice(getPayrollIssueMessage(row.validationIssues[0]));
+      setNotice(getPayrollIssueMessage(row.validationIssues[0]), "warning");
       return;
     }
     patchMonthlyEntry(employeeId, {
@@ -373,7 +373,7 @@ export function App() {
       completedAt: complete ? new Date().toISOString() : null,
     });
     if (row) {
-      setNotice(complete ? `${row.employee.name} 已确认完成` : `${row.employee.name} 已取消确认，请重新核对后再确认`);
+      setNotice(complete ? `${row.employee.name} 已确认完成` : `${row.employee.name} 已取消确认，请重新核对后再确认`, complete ? "success" : "warning");
     }
   }
 
@@ -384,7 +384,7 @@ export function App() {
   async function confirmClosePayroll() {
     if (!activeStore) return;
     if (!closeModal?.canClose) {
-      setNotice("仍有员工阻塞本店月结，请先继续核对");
+      setNotice("仍有员工阻塞本店月结，请先继续核对", "warning");
       return;
     }
     const now = new Date().toISOString();
@@ -406,7 +406,7 @@ export function App() {
     event.preventDefault();
     const reason = unlockModal?.reason.trim();
     if (!reason || !activeStore) {
-      setNotice("请填写解锁原因");
+      setNotice("请填写解锁原因", "warning");
       return;
     }
     try {
@@ -418,7 +418,7 @@ export function App() {
         reason,
       }));
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return;
     }
     setUnlockModal(null);
@@ -439,7 +439,7 @@ export function App() {
       }));
       setNotice("发薪批次已创建，请逐人记录支付与工资单交付状态");
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       throw error;
     }
   }
@@ -458,7 +458,7 @@ export function App() {
       }));
       setNotice("发薪交付状态已更新");
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
     }
   }
 
@@ -473,7 +473,7 @@ export function App() {
         at: new Date().toISOString(),
       }));
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return error.message;
     }
     setNotice("门店工资规则已更新；已月结月份不受影响");
@@ -494,7 +494,7 @@ export function App() {
         setNotice("门店名称已更新");
       }
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return;
     }
     setStoreModal(null);
@@ -504,7 +504,7 @@ export function App() {
     try {
       archiveStore(workspace, { storeId: store.id, month: currentMonth, at: new Date().toISOString() });
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return;
     }
     setArchiveStoreModal(store);
@@ -531,7 +531,7 @@ export function App() {
     const status = isFormal ? "正式·已月结" : "草稿·未月结";
     const rows = buildExportRows(activeStore, payrollRows, status);
     const headers = Object.keys(rows[0] ?? {});
-    if (headers.length === 0) return setNotice("当前没有可导出的工资数据");
+    if (headers.length === 0) return setNotice("当前没有可导出的工资数据", "warning");
     const csvLines = [headers.join(","), ...rows.map((row) => headers.map((header) => csvEscape(row[header])).join(","))];
     const csvText = `\uFEFF${csvLines.join("\n")}`;
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(csvText));
@@ -585,7 +585,7 @@ export function App() {
       URL.revokeObjectURL(url);
       setNotice(passphrase ? "加密备份已导出" : "数据备份已导出");
     }
-    doExport().catch(() => setNotice("备份导出失败"));
+    doExport().catch(() => setNotice("备份导出失败", "error"));
   }
 
   async function prepareWorkspaceRestore(file, passphrase) {
@@ -596,21 +596,21 @@ export function App() {
       let payload = JSON.parse(raw);
 
       if (payload.protected) {
-        if (!passphrase) return setNotice("此备份已加密，请输入口令");
+        if (!passphrase) return setNotice("此备份已加密，请输入口令", "warning");
         try {
           const decrypted = await decryptPayload(payload, passphrase);
           payload = JSON.parse(decrypted);
         } catch {
-          return setNotice("口令不正确或备份已损坏");
+          return setNotice("口令不正确或备份已损坏", "error");
         }
       }
 
       validateBackupPayload(payload);
       const data = migrateWorkspace(payload.data);
-      if (!Array.isArray(data.employees) || !Array.isArray(data.assignments)) return setNotice("备份数据结构不完整");
+      if (!Array.isArray(data.employees) || !Array.isArray(data.assignments)) return setNotice("备份数据结构不完整", "error");
       setRestoreModal({ data, exportedAt: payload.exportedAt, version: payload.version, storeCount: data.stores.length });
     } catch {
-      setNotice("文件不是工资系统备份");
+      setNotice("文件不是工资系统备份", "error");
     }
   }
 
@@ -621,7 +621,7 @@ export function App() {
       const data = migrateWorkspace(payload.data);
       setRestoreModal({ data, exportedAt: payload.exportedAt, version: payload.version, storeCount: data.stores.length, source: "automatic" });
     } catch {
-      setNotice("自动恢复点已损坏，无法恢复");
+      setNotice("自动恢复点已损坏，无法恢复", "error");
     }
   }
 
@@ -652,19 +652,19 @@ export function App() {
 
   function submitEmployee(event) {
     event.preventDefault();
-    if (!activeStore) return setNotice("当前没有可用门店");
+    if (!activeStore) return setNotice("当前没有可用门店", "warning");
     if (employeeModal.mode === "create") {
       const name = `${employeeModal.name ?? ""}`.trim();
-      if (!name) return setNotice("请填写员工姓名");
-      if (name.length > 40) return setNotice("员工姓名过长");
+      if (!name) return setNotice("请填写员工姓名", "warning");
+      if (name.length > 40) return setNotice("员工姓名过长", "warning");
       const phone = `${employeeModal.phone ?? ""}`.trim();
-      if (phone && !/^1[3-9]\d{9}$/.test(phone)) return setNotice("手机号格式无效");
+      if (phone && !/^1[3-9]\d{9}$/.test(phone)) return setNotice("手机号格式无效", "warning");
       const employeeNumber = `${employeeModal.employeeNumber ?? ""}`.trim();
       if (employeeNumber && workspace.employees.some((item) => `${item.employeeNumber ?? ""}`.toLowerCase() === employeeNumber.toLowerCase())) {
-        return setNotice("员工工号不能重复");
+        return setNotice("员工工号不能重复", "warning");
       }
       const role = `${employeeModal.role ?? ""}`.trim();
-      if (role.length > 20) return setNotice("岗位名称过长");
+      if (role.length > 20) return setNotice("岗位名称过长", "warning");
       const hireDate = /^\d{4}-\d{2}-\d{2}$/.test(`${employeeModal.hireDate ?? ""}`) ? employeeModal.hireDate : null;
       const employeeId = makeId("employee");
       const employee = {
@@ -687,7 +687,7 @@ export function App() {
       setNotice("员工已新增，请设置初始薪资");
     } else {
       const target = (workspace.employees ?? []).find((item) => item.id === employeeModal.employeeId);
-      if (!target) return setNotice("未找到员工记录");
+      if (!target) return setNotice("未找到员工记录", "warning");
       try {
         setWorkspace(updateEmployeeProfile(workspace, {
           employeeId: target.id,
@@ -700,7 +700,7 @@ export function App() {
           at: new Date().toISOString(),
         }));
       } catch (error) {
-        setNotice(error.message);
+        setNotice(error.message, "error");
         return;
       }
       setNotice("员工资料已更新");
@@ -724,10 +724,10 @@ export function App() {
   }
 
   function openAdjustmentModal(target = selectedRow?.employee?.id) {
-    if (isLocked) return setNotice("本月工资已月结，不能新增调薪");
+    if (isLocked) return setNotice("本月工资已月结，不能新增调薪", "warning");
     const employeeId = typeof target === "object" && target !== null ? target.id : target;
     const employee = (workspace.employees ?? []).find((item) => item.id === employeeId) ?? activeEmployees[0];
-    if (!employee) return setNotice("当前门店没有在职员工");
+    if (!employee) return setNotice("当前门店没有在职员工", "warning");
     setAdjustmentModal({ mode: employee.salaryConfigured ? "adjustment" : "initial", draft: createAdjustmentDraft(employee) });
   }
 
@@ -742,7 +742,7 @@ export function App() {
       setNotice("商品已加入库存目录");
       return true;
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return false;
     }
   }
@@ -756,7 +756,7 @@ export function App() {
       setNotice("商品资料已更新");
       return true;
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return false;
     }
   }
@@ -770,7 +770,7 @@ export function App() {
       setNotice("商品已归档，历史流水仍可查阅");
       return true;
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return false;
     }
   }
@@ -791,7 +791,7 @@ export function App() {
       setNotice("库存流水已记录");
       return true;
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return false;
     }
   }
@@ -813,7 +813,7 @@ export function App() {
       setNotice("全店库存盘点已保存");
       return true;
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return false;
     }
   }
@@ -836,7 +836,7 @@ export function App() {
       setNotice("库存已按批次调拨至目标门店");
       return true;
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return false;
     }
   }
@@ -857,7 +857,7 @@ export function App() {
       setNotice("销售已记录，库存已同步扣减");
       return true;
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return false;
     }
   }
@@ -893,7 +893,7 @@ export function App() {
       }
       return true;
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return false;
     }
   }
@@ -913,7 +913,7 @@ export function App() {
       setNotice("销售退款已记录，原批次库存与当日应收已同步更新");
       return true;
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return false;
     }
   }
@@ -934,7 +934,7 @@ export function App() {
       setNotice("营业日已日结冻结");
       return true;
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return false;
     }
   }
@@ -951,7 +951,7 @@ export function App() {
       setNotice("营业日已解锁，可重新录入销售");
       return true;
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return false;
     }
   }
@@ -970,7 +970,7 @@ export function App() {
       setNotice("供应商已新增，仅保存企业主体信息");
       return true;
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return false;
     }
   }
@@ -986,7 +986,7 @@ export function App() {
       setNotice("供应商已归档，历史采购单仍可查阅");
       return true;
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return false;
     }
   }
@@ -1011,7 +1011,7 @@ export function App() {
       setNotice(purchase.settlementStatus === "paid" ? "采购已付款入库，库存与最近进价已同步更新" : "采购已待付款入库，库存与最近进价已同步更新");
       return true;
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return false;
     }
   }
@@ -1029,7 +1029,7 @@ export function App() {
       setNotice("采购付款已记录，并将在付款日期计入经营现金流");
       return true;
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return false;
     }
   }
@@ -1054,7 +1054,7 @@ export function App() {
         : "采购退货已记录，原采购批次库存已同步更新；待付款退货不计入现金流");
       return true;
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return false;
     }
   }
@@ -1074,7 +1074,7 @@ export function App() {
       setNotice("经营费用已记录");
       return true;
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return false;
     }
   }
@@ -1091,7 +1091,7 @@ export function App() {
       setNotice("费用记录已作废，历史已保留");
       return true;
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return false;
     }
   }
@@ -1101,7 +1101,7 @@ export function App() {
     event.preventDefault();
     const draft = adjustmentModal.draft;
     const target = workspace.employees.find((employee) => employee.id === draft.employeeId);
-    if (!target || !activeStore) return setNotice("请选择要调薪的员工");
+    if (!target || !activeStore) return setNotice("请选择要调薪的员工", "warning");
     try {
       setWorkspace(recordSalaryAdjustment(workspace, {
         employeeId: target.id,
@@ -1112,7 +1112,7 @@ export function App() {
         id: makeId("adjustment"),
       }));
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return;
     }
     setSelectedEmployeeId(target.id);
@@ -1126,14 +1126,14 @@ export function App() {
 
   function submitResignation(event) {
     event.preventDefault();
-    if (!resignationModal?.employee || (resignationModal.mode === "resign" && !resignationModal.date)) return setNotice("请选择离职日期");
+    if (!resignationModal?.employee || (resignationModal.mode === "resign" && !resignationModal.date)) return setNotice("请选择离职日期", "warning");
     const isResigned = resignationModal.mode === "resign";
     try {
       setWorkspace(isResigned
         ? resignEmployee(workspace, { employeeId: resignationModal.employee.id, resignationDate: resignationModal.date, eventId: makeId("resignation") })
         : restoreEmployee(workspace, { employeeId: resignationModal.employee.id, eventId: makeId("restore"), at: new Date().toISOString() }));
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return;
     }
     setResignationModal(null);
@@ -1142,9 +1142,9 @@ export function App() {
 
   function openTransferModal(employee) {
     const hasFutureTransfer = getEmployeeAssignments(workspace, employee.id).some((assignment) => assignment.startMonth > currentMonth);
-    if (hasFutureTransfer) return setNotice("该员工已有计划调店记录");
+    if (hasFutureTransfer) return setNotice("该员工已有计划调店记录", "warning");
     const targetStore = activeStores.find((store) => store.id !== activeStore.id);
-    if (!targetStore) return setNotice("没有可接收员工的其他营业门店");
+    if (!targetStore) return setNotice("没有可接收员工的其他营业门店", "warning");
     setTransferModal({ employee, targetStoreId: targetStore.id, effectiveMonth: currentMonth, reason: "排班平衡" });
   }
 
@@ -1152,7 +1152,7 @@ export function App() {
     event.preventDefault();
     const draft = transferModal;
     const targetStore = activeStores.find((store) => store.id === draft.targetStoreId);
-    if (!draft || !targetStore) return setNotice("请选择有效的目标门店");
+    if (!draft || !targetStore) return setNotice("请选择有效的目标门店", "warning");
     try {
       setWorkspace(transferEmployee(workspace, {
         employeeId: draft.employee.id,
@@ -1164,7 +1164,7 @@ export function App() {
         reason: draft.reason,
       }));
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message, "error");
       return;
     }
     if (draft.effectiveMonth === currentMonth) setActiveStoreId(targetStore.id);
@@ -1173,7 +1173,14 @@ export function App() {
   }
 
   if (appLocked === null && loadedWorkspace === null && loadError === null) {
-    return <div className="app-empty">正在启动…</div>;
+    return (
+      <>
+        {noticeContextHolder}
+        <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#faf6f1" }}>
+          <Spin size="large" />
+        </div>
+      </>
+    );
   }
 
   if (loadError === "corrupt") {
@@ -1191,7 +1198,7 @@ export function App() {
           prepareWorkspaceRestore(file);
         }
       } catch {
-        setNotice("文件不是工资系统备份");
+        setNotice("文件不是工资系统备份", "error");
       }
     }
 
@@ -1215,7 +1222,7 @@ export function App() {
             input.click();
           }}
           onExportCorrupt={() => {
-            setNotice("请从系统设置中导出或联系支持");
+            setNotice("请从系统设置中导出或联系支持", "warning");
           }}
           onReset={async () => {
             const next = createInitialWorkspace();
@@ -1235,47 +1242,49 @@ export function App() {
               <h1>此备份已加密</h1>
               <p>请输入备份口令以恢复数据</p>
               <form className="modal-form" onSubmit={handleRecoveryPassphraseSubmit}>
-                <label className="field"><span>备份口令</span><input autoFocus type="password" value={recoveryPassphrase} onChange={(e) => setRecoveryPassphrase(e.target.value)} /></label>
-                <div className="modal-actions"><button className="secondary-button" type="button" onClick={() => { setRecoveryFile(null); setRecoveryPassphrase(""); }}>取消</button><button className="primary-button" type="submit" disabled={!recoveryPassphrase}>确认</button></div>
+                <label className="field"><span>备份口令</span><Input.Password autoFocus value={recoveryPassphrase} onChange={(e) => setRecoveryPassphrase(e.target.value)} /></label>
+                <div className="modal-actions"><Button onClick={() => { setRecoveryFile(null); setRecoveryPassphrase(""); }}>取消</Button><Button type="primary" htmlType="submit" disabled={!recoveryPassphrase}>确认</Button></div>
               </form>
             </div>
           </div>
         ) : null}
-        {notice ? <div className="toast" role="status" aria-live="polite">{notice}</div> : null}
-        {restoreModal ? <Modal title="恢复备份数据" onClose={() => setRestoreModal(null)}><div className="modal-form"><div className="modal-summary"><strong>即将覆盖当前工资系统数据</strong><span>备份版本：{restoreModal.version ?? "未知"} · 门店数量：{restoreModal.storeCount} 家</span><span>导出时间：{restoreModal.exportedAt ? new Date(restoreModal.exportedAt).toLocaleString("zh-CN") : "未知"}</span></div><p className="modal-copy">旧版备份会自动升级，恢复后保留全部门店、员工及工资记录。</p><div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setRestoreModal(null)}>取消</button><button className="primary-button" type="button" onClick={confirmWorkspaceRestore}>确认恢复</button></div></div></Modal> : null}
+        {noticeContextHolder}
+        {restoreModal ? <Modal title="恢复备份数据" onClose={() => setRestoreModal(null)}><div className="modal-form"><div className="modal-summary"><strong>即将覆盖当前工资系统数据</strong><span>备份版本：{restoreModal.version ?? "未知"} · 门店数量：{restoreModal.storeCount} 家</span><span>导出时间：{restoreModal.exportedAt ? new Date(restoreModal.exportedAt).toLocaleString("zh-CN") : "未知"}</span></div><p className="modal-copy">旧版备份会自动升级，恢复后保留全部门店、员工及工资记录。</p><div className="modal-actions"><Button onClick={() => setRestoreModal(null)}>取消</Button><Button type="primary" onClick={confirmWorkspaceRestore}>确认恢复</Button></div></div></Modal> : null}
       </>
     );
   }
 
   if (appLocked) {
-    return <LockScreen onUnlock={() => setAppLocked(false)} />;
+    return (
+      <>
+        {noticeContextHolder}
+        <LockScreen onUnlock={() => setAppLocked(false)} />
+      </>
+    );
   }
 
-  if (!activeStoreView) return <div className="app-empty">没有可用门店，请从备份恢复数据。</div>;
+  if (!activeStoreView) {
+    return (
+      <>
+        {noticeContextHolder}
+        <div className="app-empty">没有可用门店，请从备份恢复数据。</div>
+      </>
+    );
+  }
 
   const formattedSaveTime = saveState.savedAt
     ? `已保存 ${new Date(saveState.savedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`
     : "已保存";
 
   return (
-    <ConfigProvider
-      theme={{
-        token: {
-          colorPrimary: "#1677ff",
-          colorSuccess: "#52c41a",
-          colorWarning: "#faad14",
-          colorError: "#ff4d4f",
-          borderRadius: 8,
-          fontFamily: '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", -apple-system, sans-serif',
-        },
-      }}
-    >
+    <>
+      {noticeContextHolder}
       <Layout style={{ minHeight: "100vh" }}>
         {!isMobile ? <Sider
           collapsible
           collapsed={collapsed}
           onCollapse={(value) => setCollapsed(value)}
-          theme="dark"
+          theme="light"
           width={220}
           style={{
             overflow: "auto",
@@ -1285,6 +1294,8 @@ export function App() {
             top: 0,
             bottom: 0,
             zIndex: 1001,
+            background: "#fffdf9",
+            borderRight: "1px solid #f0e6db",
           }}
         >
           <div
@@ -1295,26 +1306,26 @@ export function App() {
               justifyContent: collapsed ? "center" : "flex-start",
               padding: collapsed ? "0" : "0 20px",
               gap: 12,
-              background: "#002140",
+              borderBottom: "1px solid #f0e6db",
               overflow: "hidden",
             }}
           >
             <img src="/app-icon.svg" alt="logo" style={{ width: 32, height: 32, flexShrink: 0 }} />
             {!collapsed && (
-              <div style={{ color: "#fff", lineHeight: 1.2, whiteSpace: "nowrap" }}>
-                <strong style={{ fontSize: 16, display: "block", color: "#fff" }}>门店工资助手</strong>
-                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.65)" }}>人员与工资一站式管理</span>
+              <div style={{ lineHeight: 1.2, whiteSpace: "nowrap" }}>
+                <strong style={{ fontSize: 16, display: "block", color: "#2e2620" }}>门店工资助手</strong>
+                <span style={{ fontSize: 11, color: "#7a6c61" }}>人员与工资一站式管理</span>
               </div>
             )}
           </div>
 
           <Menu
-            theme="dark"
+            theme="light"
             mode="inline"
             selectedKeys={[activePage]}
             onClick={({ key }) => setActivePage(key)}
             items={NAV_ITEMS}
-            style={{ borderRight: 0, marginTop: 8 }}
+            style={{ borderRight: 0, marginTop: 8, background: "transparent" }}
           />
         </Sider> : null}
 
@@ -1337,7 +1348,7 @@ export function App() {
           />
         </Drawer>
 
-        <Layout style={{ marginLeft: isMobile ? 0 : collapsed ? 80 : 220, transition: "all 0.2s", background: "#f0f2f5" }}>
+        <Layout style={{ marginLeft: isMobile ? 0 : collapsed ? 80 : 220, transition: "all 0.2s" }}>
           <Header
             style={{
               padding: isMobile ? "0 12px" : "0 24px",
@@ -1405,7 +1416,7 @@ export function App() {
                 }
               />
             ) : null}
-            <Suspense fallback={<div style={{ minHeight: 280, display: "grid", placeItems: "center", color: "#595959" }}>正在加载工作区…</div>}>
+            <Suspense fallback={<div style={{ minHeight: 280, display: "grid", placeItems: "center" }}><Spin size="large" /></div>}>
             {activePage === "home" ? <HomePage workspace={workspace} activeMonth={activeMonth} onNavigate={setActivePage} onSelectStore={setActiveStoreId} onSelectEmployee={setSelectedEmployeeId} openAdjustmentModal={openAdjustmentModal} onNavigateToEmployee={handleNavigateToEmployee} /> : null}
             {activePage === "employees" ? <EmployeesPage workspace={workspace} store={activeStore} currentMonth={currentMonth} onCreate={() => setEmployeeModal({ mode: "create", draft: createEmployeeDraft() })} onEditProfile={(employee) => setEmployeeModal({ mode: "edit", employeeId: employee.id, name: employee.name, phone: employee.phone ?? "", employeeNumber: employee.employeeNumber ?? "", role: employee.role ?? "", hireDate: employee.hireDate ?? "" })} onToggleResignation={handleToggleResignation} onTransfer={openTransferModal} /> : null}
             {activePage === "attendance" ? <AttendancePage store={activeStore} activeMonth={activeMonth} rows={payrollRows} patchEntry={patchMonthlyEntry} toggleComplete={toggleEntryComplete} isLocked={isLocked} onNavigate={setActivePage} /> : null}
@@ -1417,20 +1428,17 @@ export function App() {
         </Layout>
       </Layout>
 
+      {storeModal ? <Modal title={storeModal.mode === "create" ? "新增门店" : "编辑门店名称"} onClose={() => setStoreModal(null)}><form className="modal-form" onSubmit={submitStore}><label className="field"><span>门店名称</span><Input autoFocus maxLength={40} value={storeModal.name} onChange={(event) => setStoreModal((current) => ({ ...current, name: event.target.value }))} placeholder="例如：人民广场店" /></label>{storeModal.mode === "create" ? <p className="modal-copy">新门店会复制当前门店的工资规则，不会复制员工或工资记录。</p> : null}<ModalActions onCancel={() => setStoreModal(null)} label="保存门店" /></form></Modal> : null}
 
-      {notice ? <div className="toast" role="status" aria-live="polite">{notice}</div> : null}
+      {archiveStoreModal ? <Modal title="停用门店" onClose={() => setArchiveStoreModal(null)}><div className="modal-form"><div className="modal-summary"><strong>{archiveStoreModal.name}</strong><span>停用后将从日常录入中隐藏，历史工资仍可在报表中查看。</span></div><div className="modal-actions"><Button onClick={() => setArchiveStoreModal(null)}>取消</Button><Button danger onClick={confirmArchiveStore}>确认停用</Button></div></div></Modal> : null}
 
-      {storeModal ? <Modal title={storeModal.mode === "create" ? "新增门店" : "编辑门店名称"} onClose={() => setStoreModal(null)}><form className="modal-form" onSubmit={submitStore}><label className="field"><span>门店名称</span><input autoFocus maxLength="40" value={storeModal.name} onChange={(event) => setStoreModal((current) => ({ ...current, name: event.target.value }))} placeholder="例如：人民广场店" /></label>{storeModal.mode === "create" ? <p className="modal-copy">新门店会复制当前门店的工资规则，不会复制员工或工资记录。</p> : null}<ModalActions onCancel={() => setStoreModal(null)} label="保存门店" /></form></Modal> : null}
+      {employeeModal ? <Modal title={employeeModal.mode === "edit" ? "编辑员工资料" : "新增员工"} onClose={() => setEmployeeModal(null)}><form className="modal-form" onSubmit={submitEmployee}><div className="modal-summary"><strong>{employeeModal.mode === "edit" ? "修改姓名、联系方式与岗位信息" : "录入员工真实信息"}</strong><span>姓名必填，其余字段可留空，后续可在员工管理中随时修改。</span></div><label className="field"><span>姓名 *</span><Input autoFocus maxLength={40} value={employeeModal.name ?? ""} onChange={(event) => setEmployeeModal((current) => ({ ...current, name: event.target.value }))} placeholder="例如：张三" /></label><label className="field"><span>手机号</span><Input maxLength={11} value={employeeModal.phone ?? ""} onChange={(event) => setEmployeeModal((current) => ({ ...current, phone: event.target.value }))} placeholder="例如：13800000000" /></label><label className="field"><span>员工工号</span><Input maxLength={20} value={employeeModal.employeeNumber ?? ""} onChange={(event) => setEmployeeModal((current) => ({ ...current, employeeNumber: event.target.value }))} placeholder="例如：EMP-001" /></label><label className="field"><span>岗位</span><Input maxLength={20} value={employeeModal.role ?? ""} onChange={(event) => setEmployeeModal((current) => ({ ...current, role: event.target.value }))} placeholder="例如：店长 / 收银 / 店员" /></label><label className="field"><span>入职日期</span><Input type="date" value={employeeModal.hireDate ?? ""} onChange={(event) => setEmployeeModal((current) => ({ ...current, hireDate: event.target.value }))} /></label>{employeeModal.mode === "edit" ? null : <p className="modal-copy">基础工资、加班时薪和全勤奖金只能在工资管理的调薪记录中修改。</p>}<ModalActions onCancel={() => setEmployeeModal(null)} label={employeeModal.mode === "edit" ? "保存资料" : "新增并设置薪资"} /></form></Modal> : null}
 
-      {archiveStoreModal ? <Modal title="停用门店" onClose={() => setArchiveStoreModal(null)}><div className="modal-form"><div className="modal-summary"><strong>{archiveStoreModal.name}</strong><span>停用后将从日常录入中隐藏，历史工资仍可在报表中查看。</span></div><div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setArchiveStoreModal(null)}>取消</button><button className="danger-button" type="button" onClick={confirmArchiveStore}>确认停用</button></div></div></Modal> : null}
+      {adjustmentModal ? <Modal title={adjustmentModal.mode === "initial" ? "设置初始薪资" : "新增调薪记录"} width={700} onClose={() => setAdjustmentModal(null)}><form className="modal-form modal-form--wide" onSubmit={submitAdjustment}><label className="field"><span>员工</span><Select value={adjustmentModal.draft.employeeId} onChange={(value) => { const employee = activeEmployees.find((item) => item.id === value); setAdjustmentModal((current) => ({ ...current, mode: employee?.salaryConfigured ? "adjustment" : "initial", draft: { ...createAdjustmentDraft(employee), date: current.draft.date, reason: current.draft.reason } })); }} options={activeEmployees.map((employee) => ({ value: employee.id, label: employee.name }))} /></label><label className="field"><span>调整日期</span><Input type="date" value={adjustmentModal.draft.date} onChange={(event) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, date: event.target.value } }))} /></label><div className="adjustment-grid"><div className="adjustment-grid__head">当前值</div><div className="adjustment-grid__head">调整后</div>{EMPLOYEE_FIELDS.map((field) => { const employee = activeEmployees.find((item) => item.id === adjustmentModal.draft.employeeId); const old = employee?.[field.key] ?? 0; return <div className="adjustment-row" key={field.key}><div className="adjustment-row__old"><span>{field.label}</span><strong>{field.key === "overtimeRate" ? `${old} / 小时` : formatCurrency(old)}</strong></div><label className="field adjustment-row__new"><span>{field.label}</span><Input type="number" min={field.key === "baseSalary" ? "0.01" : "0"} step={field.step} value={adjustmentModal.draft.values?.[field.key] ?? ""} onChange={(event) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, values: { ...current.draft.values, [field.key]: event.target.value } } }))} /></label></div>; })}</div><label className="field"><span>业务原因</span><Select value={adjustmentModal.draft.reason} onChange={(value) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, reason: value } }))} options={PAYROLL_ADJUSTMENT_REASONS.map((reason) => ({ value: reason, label: reason }))} /></label><ModalActions onCancel={() => setAdjustmentModal(null)} label={adjustmentModal.mode === "initial" ? "确认初始薪资" : "保存记录"} /></form></Modal> : null}
 
-      {employeeModal ? <Modal title={employeeModal.mode === "edit" ? "编辑员工资料" : "新增员工"} onClose={() => setEmployeeModal(null)}><form className="modal-form" onSubmit={submitEmployee}><div className="modal-summary"><strong>{employeeModal.mode === "edit" ? "修改姓名、联系方式与岗位信息" : "录入员工真实信息"}</strong><span>姓名必填，其余字段可留空，后续可在员工管理中随时修改。</span></div><label className="field"><span>姓名 *</span><input autoFocus maxLength="40" value={employeeModal.name ?? ""} onChange={(event) => setEmployeeModal((current) => ({ ...current, name: event.target.value }))} placeholder="例如：张三" /></label><label className="field"><span>手机号</span><input maxLength="11" value={employeeModal.phone ?? ""} onChange={(event) => setEmployeeModal((current) => ({ ...current, phone: event.target.value }))} placeholder="例如：13800000000" /></label><label className="field"><span>员工工号</span><input maxLength="20" value={employeeModal.employeeNumber ?? ""} onChange={(event) => setEmployeeModal((current) => ({ ...current, employeeNumber: event.target.value }))} placeholder="例如：EMP-001" /></label><label className="field"><span>岗位</span><input maxLength="20" value={employeeModal.role ?? ""} onChange={(event) => setEmployeeModal((current) => ({ ...current, role: event.target.value }))} placeholder="例如：店长 / 收银 / 店员" /></label><label className="field"><span>入职日期</span><input type="date" value={employeeModal.hireDate ?? ""} onChange={(event) => setEmployeeModal((current) => ({ ...current, hireDate: event.target.value }))} /></label>{employeeModal.mode === "edit" ? null : <p className="modal-copy">基础工资、加班时薪和全勤奖金只能在工资管理的调薪记录中修改。</p>}<ModalActions onCancel={() => setEmployeeModal(null)} label={employeeModal.mode === "edit" ? "保存资料" : "新增并设置薪资"} /></form></Modal> : null}
+      {transferModal ? <Modal title="员工调店" onClose={() => setTransferModal(null)}><form className="modal-form" onSubmit={submitTransfer}><div className="modal-summary"><strong>{transferModal.employee.name}</strong><span>当前门店：{activeStore.name}</span></div><label className="field"><span>目标门店</span><Select value={transferModal.targetStoreId} onChange={(value) => setTransferModal((current) => ({ ...current, targetStoreId: value }))} options={activeStores.filter((store) => store.id !== activeStore.id).map((store) => ({ value: store.id, label: store.name }))} /></label><label className="field"><span>生效月份</span><Input type="month" min={currentMonth} value={transferModal.effectiveMonth} onChange={(event) => setTransferModal((current) => ({ ...current, effectiveMonth: event.target.value }))} /></label><label className="field"><span>调店原因</span><Select value={transferModal.reason} onChange={(value) => setTransferModal((current) => ({ ...current, reason: value }))} options={ASSIGNMENT_REASONS.filter((reason) => ["新店筹备支援", "排班平衡"].includes(reason)).map((reason) => ({ value: reason, label: reason }))} /></label><ModalActions onCancel={() => setTransferModal(null)} label="保存调店计划" /></form></Modal> : null}
 
-      {adjustmentModal ? <Modal title={adjustmentModal.mode === "initial" ? "设置初始薪资" : "新增调薪记录"} width={700} onClose={() => setAdjustmentModal(null)}><form className="modal-form modal-form--wide" onSubmit={submitAdjustment}><label className="field"><span>员工</span><select value={adjustmentModal.draft.employeeId} onChange={(event) => { const employee = activeEmployees.find((item) => item.id === event.target.value); setAdjustmentModal((current) => ({ ...current, mode: employee?.salaryConfigured ? "adjustment" : "initial", draft: { ...createAdjustmentDraft(employee), date: current.draft.date, reason: current.draft.reason } })); }}>{activeEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></label><label className="field"><span>调整日期</span><input type="date" value={adjustmentModal.draft.date} onChange={(event) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, date: event.target.value } }))} /></label><div className="adjustment-grid"><div className="adjustment-grid__head">当前值</div><div className="adjustment-grid__head">调整后</div>{EMPLOYEE_FIELDS.map((field) => { const employee = activeEmployees.find((item) => item.id === adjustmentModal.draft.employeeId); const old = employee?.[field.key] ?? 0; return <div className="adjustment-row" key={field.key}><div className="adjustment-row__old"><span>{field.label}</span><strong>{field.key === "overtimeRate" ? `${old} / 小时` : formatCurrency(old)}</strong></div><label className="field adjustment-row__new"><span>{field.label}</span><input type="number" min={field.key === "baseSalary" ? "0.01" : "0"} step={field.step} value={adjustmentModal.draft.values?.[field.key] ?? ""} onChange={(event) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, values: { ...current.draft.values, [field.key]: event.target.value } } }))} /></label></div>; })}</div><label className="field"><span>业务原因</span><select value={adjustmentModal.draft.reason} onChange={(event) => setAdjustmentModal((current) => ({ ...current, draft: { ...current.draft, reason: event.target.value } }))}>{PAYROLL_ADJUSTMENT_REASONS.map((reason) => <option key={reason} value={reason}>{reason}</option>)}</select></label><ModalActions onCancel={() => setAdjustmentModal(null)} label={adjustmentModal.mode === "initial" ? "确认初始薪资" : "保存记录"} /></form></Modal> : null}
-
-      {transferModal ? <Modal title="员工调店" onClose={() => setTransferModal(null)}><form className="modal-form" onSubmit={submitTransfer}><div className="modal-summary"><strong>{transferModal.employee.name}</strong><span>当前门店：{activeStore.name}</span></div><label className="field"><span>目标门店</span><select value={transferModal.targetStoreId} onChange={(event) => setTransferModal((current) => ({ ...current, targetStoreId: event.target.value }))}>{activeStores.filter((store) => store.id !== activeStore.id).map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label><label className="field"><span>生效月份</span><input type="month" min={currentMonth} value={transferModal.effectiveMonth} onChange={(event) => setTransferModal((current) => ({ ...current, effectiveMonth: event.target.value }))} /></label><label className="field"><span>调店原因</span><select value={transferModal.reason} onChange={(event) => setTransferModal((current) => ({ ...current, reason: event.target.value }))}>{ASSIGNMENT_REASONS.filter((reason) => ["新店筹备支援", "排班平衡"].includes(reason)).map((reason) => <option key={reason} value={reason}>{reason}</option>)}</select></label><ModalActions onCancel={() => setTransferModal(null)} label="保存调店计划" /></form></Modal> : null}
-
-      {resignationModal ? <Modal title={resignationModal.mode === "resign" ? "办理离职" : "恢复在职"} onClose={() => setResignationModal(null)}><form className="modal-form" onSubmit={submitResignation}><div className="modal-summary"><strong>{resignationModal.employee.name}</strong><span>{activeStore.name} · 工号 {resignationModal.employee.id}</span></div>{resignationModal.mode === "resign" ? <label className="field"><span>离职日期</span><input type="date" value={resignationModal.date} onChange={(event) => setResignationModal((current) => ({ ...current, date: event.target.value }))} /></label> : <p className="modal-copy">恢复在职后，该员工会回到当前归属门店的工资和考勤列表中。</p>}<ModalActions onCancel={() => setResignationModal(null)} label={resignationModal.mode === "resign" ? "确认离职" : "确认恢复"} /></form></Modal> : null}
+      {resignationModal ? <Modal title={resignationModal.mode === "resign" ? "办理离职" : "恢复在职"} onClose={() => setResignationModal(null)}><form className="modal-form" onSubmit={submitResignation}><div className="modal-summary"><strong>{resignationModal.employee.name}</strong><span>{activeStore.name} · 工号 {resignationModal.employee.id}</span></div>{resignationModal.mode === "resign" ? <label className="field"><span>离职日期</span><Input type="date" value={resignationModal.date} onChange={(event) => setResignationModal((current) => ({ ...current, date: event.target.value }))} /></label> : <p className="modal-copy">恢复在职后，该员工会回到当前归属门店的工资和考勤列表中。</p>}<ModalActions onCancel={() => setResignationModal(null)} label={resignationModal.mode === "resign" ? "确认离职" : "确认恢复"} /></form></Modal> : null}
 
       {closeModal ? <Modal title="确认本月月结" onClose={() => setCloseModal(null)}>
         <div className="modal-form">
@@ -1458,22 +1466,22 @@ export function App() {
           {closeModal.cleanCount > 0 ? <p className="modal-copy">{closeModal.cleanCount} 位员工已确认完成且没有复核提醒。</p> : null}
           {closeModal.canClose ? <p className="modal-copy">当前没有月结阻塞，可以冻结本店本月工资。</p> : <p className="modal-copy">请先处理阻塞员工；清零后才能执行本店月结。</p>}
           <div className="modal-actions">
-            <button className="secondary-button" type="button" onClick={() => setCloseModal(null)}>继续核对</button>
-            {closeModal.canClose ? <button className="primary-button" type="button" onClick={confirmClosePayroll}>{closeModal.reviewCount > 0 ? "确认复核并月结" : "确认月结"}</button> : null}
+            <Button onClick={() => setCloseModal(null)}>继续核对</Button>
+            {closeModal.canClose ? <Button type="primary" onClick={confirmClosePayroll}>{closeModal.reviewCount > 0 ? "确认复核并月结" : "确认月结"}</Button> : null}
           </div>
         </div>
       </Modal> : null}
 
-      {unlockModal ? <Modal title="解锁本月工资" onClose={() => setUnlockModal(null)}><form className="modal-form" onSubmit={confirmUnlockPayroll}><div className="modal-summary"><strong>{activeStore.name} · {activeMonth}</strong><span>解锁后可以重新录入，原月结结果将停止使用。</span></div><label className="field"><span>解锁业务原因</span><select autoFocus value={unlockModal.reason} onChange={(event) => setUnlockModal({ reason: event.target.value })}>{PAYROLL_UNLOCK_REASONS.map((reason) => <option key={reason} value={reason}>{reason}</option>)}</select></label><ModalActions onCancel={() => setUnlockModal(null)} label="确认解锁" /></form></Modal> : null}
+      {unlockModal ? <Modal title="解锁本月工资" onClose={() => setUnlockModal(null)}><form className="modal-form" onSubmit={confirmUnlockPayroll}><div className="modal-summary"><strong>{activeStore.name} · {activeMonth}</strong><span>解锁后可以重新录入，原月结结果将停止使用。</span></div><label className="field"><span>解锁业务原因</span><Select autoFocus value={unlockModal.reason} onChange={(value) => setUnlockModal({ reason: value })} options={PAYROLL_UNLOCK_REASONS.map((reason) => ({ value: reason, label: reason }))} /></label><ModalActions onCancel={() => setUnlockModal(null)} label="确认解锁" /></form></Modal> : null}
 
-      {restoreModal ? <Modal title="恢复备份数据" onClose={() => setRestoreModal(null)}><div className="modal-form"><div className="modal-summary"><strong>即将覆盖当前工资系统数据</strong><span>备份版本：{restoreModal.version ?? "未知"} · 门店数量：{restoreModal.storeCount} 家</span><span>导出时间：{restoreModal.exportedAt ? new Date(restoreModal.exportedAt).toLocaleString("zh-CN") : "未知"}</span></div><p className="modal-copy">旧版备份会自动升级，恢复后保留全部门店、员工及工资记录。</p><div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setRestoreModal(null)}>取消</button><button className="primary-button" type="button" onClick={confirmWorkspaceRestore}>确认恢复</button></div></div></Modal> : null}
+      {restoreModal ? <Modal title="恢复备份数据" onClose={() => setRestoreModal(null)}><div className="modal-form"><div className="modal-summary"><strong>即将覆盖当前工资系统数据</strong><span>备份版本：{restoreModal.version ?? "未知"} · 门店数量：{restoreModal.storeCount} 家</span><span>导出时间：{restoreModal.exportedAt ? new Date(restoreModal.exportedAt).toLocaleString("zh-CN") : "未知"}</span></div><p className="modal-copy">旧版备份会自动升级，恢复后保留全部门店、员工及工资记录。</p><div className="modal-actions"><Button onClick={() => setRestoreModal(null)}>取消</Button><Button type="primary" onClick={confirmWorkspaceRestore}>确认恢复</Button></div></div></Modal> : null}
 
-      {demoResetModal ? <Modal title="恢复泛化演示工作区" onClose={() => setDemoResetModal(false)}><div className="modal-form"><div className="modal-summary"><strong>即将重置为默认演示数据</strong><span>会恢复为泛化门店、虚构员工和示例金额。</span><span>当前本地工作区会被覆盖；如桌面版可用，将先创建恢复点。</span></div><p className="modal-copy">这个操作不会自动迁移旧示例门店名，而是直接回到默认演示工作区。</p><div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setDemoResetModal(false)}>取消</button><button className="primary-button" type="button" onClick={confirmDemoWorkspaceReset}>确认恢复演示数据</button></div></div></Modal> : null}
-    </ConfigProvider>
+      {demoResetModal ? <Modal title="恢复泛化演示工作区" onClose={() => setDemoResetModal(false)}><div className="modal-form"><div className="modal-summary"><strong>即将重置为默认演示数据</strong><span>会恢复为泛化门店、虚构员工和示例金额。</span><span>当前本地工作区会被覆盖；如桌面版可用，将先创建恢复点。</span></div><p className="modal-copy">这个操作不会自动迁移旧示例门店名，而是直接回到默认演示工作区。</p><div className="modal-actions"><Button onClick={() => setDemoResetModal(false)}>取消</Button><Button type="primary" onClick={confirmDemoWorkspaceReset}>确认恢复演示数据</Button></div></div></Modal> : null}
+    </>
   );
 }
 
 
 function ModalActions({ onCancel, label }) {
-  return <div className="modal-actions"><button className="secondary-button" type="button" onClick={onCancel}>取消</button><button className="primary-button" type="submit">{label}</button></div>;
+  return <div className="modal-actions"><Button onClick={onCancel}>取消</Button><Button type="primary" htmlType="submit">{label}</Button></div>;
 }

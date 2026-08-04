@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Alert, Button, Card, Checkbox, Col, Row, Space, Table, Tag, Typography, Grid } from "antd";
+import { Alert, Button, Card, Checkbox, Col, Input, Row, Space, Table, Tag, Typography, Grid } from "antd";
 import { ArrowRightOutlined, BarChartOutlined, ShopOutlined } from "@ant-design/icons";
 import { PageHeader } from "../components/PageHeader.jsx";
 import { StatCard } from "../components/StatCard.jsx";
@@ -101,7 +101,7 @@ export function ReportsPage({ workspace, activeMonth, setActiveMonth, onSelectSt
         eyebrow="工资报表"
         title="月度工资汇总"
         description="以员工确认和门店月结状态为准；未封账数据仅作为当前月度参考。"
-        actions={<Space><input aria-label="工资报表月份" type="month" value={activeMonth} onChange={(event) => setActiveMonth(event.target.value)} /><Checkbox checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)}>显示已停用门店</Checkbox></Space>}
+        actions={<Space><Input aria-label="工资报表月份" type="month" style={{ width: 150 }} value={activeMonth} onChange={(event) => setActiveMonth(event.target.value)} /><Checkbox checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)}>显示已停用门店</Checkbox></Space>}
       />
 
       {totals.blockers > 0 ? <Alert showIcon type="warning" message={`本月还有 ${totals.blockers} 位员工未满足月结条件，请先完成薪资设置、考勤修正或员工确认。`} /> : <Alert showIcon type="success" message="当前没有工资月结阻塞项，可继续复核或进入门店工资管理。" />}
@@ -143,7 +143,7 @@ export function ReportsPage({ workspace, activeMonth, setActiveMonth, onSelectSt
           {trend.map((item) => (
             <div key={item.month} style={{ display: "grid", gridTemplateColumns: "72px 1fr auto", alignItems: "center", gap: 12 }}>
               <Text>{item.month}</Text>
-              <div style={{ height: 12, background: "#f0f0f0", borderRadius: 6, overflow: "hidden" }}><div style={{ width: `${(item.total / maxTrend) * 100}%`, height: "100%", background: "#1677ff", borderRadius: 6 }} /></div>
+              <div style={{ height: 12, background: "#f0f0f0", borderRadius: 6, overflow: "hidden" }}><div style={{ width: `${(item.total / maxTrend) * 100}%`, height: "100%", background: "var(--brand)", borderRadius: 6 }} /></div>
               <Text strong className="tabular-nums">{formatCurrency(item.total)}</Text>
             </div>
           ))}

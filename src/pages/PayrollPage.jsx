@@ -277,7 +277,7 @@ export function PayrollPage({
             }}
             style={{ padding: "4px 8px" }}
           >
-            <span className="tabular-nums" style={{ fontSize: 16, fontWeight: 700, color: "#1677ff" }}>
+            <span className="tabular-nums" style={{ fontSize: 16, fontWeight: 700, color: "var(--brand)" }}>
               {formatCurrency(record.breakdown.netSalary)}
             </span>
           </Button>
@@ -296,9 +296,9 @@ export function PayrollPage({
 
         const btn = record.entry.isComplete ? (
           <Button
-            type="primary"
+            color="green"
+            variant="solid"
             size="small"
-            style={{ backgroundColor: "#52c41a", borderColor: "#52c41a" }}
             disabled={isClosed}
             icon={<CheckCircleOutlined />}
             onClick={(e) => {
@@ -364,7 +364,7 @@ export function PayrollPage({
               <Button
                 type="primary"
                 size="large"
-                style={{ backgroundColor: "#52c41a", borderColor: "#52c41a", height: 40, fontWeight: 600 }}
+                style={{ height: 40, fontWeight: 600 }}
                 icon={<LockOutlined />}
                 onClick={onClosePayroll}
               >
@@ -613,7 +613,7 @@ export function PayrollPage({
                     {selectedRow.breakdown.specialAdjustment >= 0 ? "+" : ""}{formatCurrency(selectedRow.breakdown.specialAdjustment)}
                   </Descriptions.Item>
                   <Descriptions.Item label="本月实发工资小计">
-                    <span className="tabular-nums" style={{ fontSize: 18, fontWeight: 700, color: "#1677ff" }}>
+                    <span className="tabular-nums" style={{ fontSize: 18, fontWeight: 700, color: "var(--brand)" }}>
                       {formatCurrency(selectedRow.breakdown.netSalary)}
                     </span>
                   </Descriptions.Item>
@@ -642,15 +642,12 @@ export function PayrollPage({
                     <form onSubmit={handleSaveAdjustment}>
                       <Space direction="vertical" style={{ width: "100%" }}>
                         <Space wrap>
-                          <select
+                          <Select
                             value={adjustmentDraft.category}
-                            onChange={(e) => setAdjustmentDraft({ ...adjustmentDraft, category: e.target.value })}
-                            style={{ height: 32, borderRadius: 4, padding: "0 8px" }}
-                          >
-                            {PAYROLL_ADJUSTMENT_CATEGORIES.map((c) => (
-                              <option key={c.value} value={c.value}>{c.label}</option>
-                            ))}
-                          </select>
+                            onChange={(category) => setAdjustmentDraft({ ...adjustmentDraft, category })}
+                            options={PAYROLL_ADJUSTMENT_CATEGORIES.map((c) => ({ value: c.value, label: c.label }))}
+                            style={{ width: 120 }}
+                          />
                           <InputNumber
                             placeholder="金额 (元)"
                             min={0.01}
@@ -796,7 +793,7 @@ export function PayrollPage({
               {formulaModalRow.breakdown.specialAdjustment >= 0 ? "+" : ""}{formatCurrency(formulaModalRow.breakdown.specialAdjustment)}
             </Descriptions.Item>
             <Descriptions.Item label="本月最终实发工资">
-              <span className="tabular-nums" style={{ fontSize: 20, fontWeight: 700, color: "#1677ff" }}>
+              <span className="tabular-nums" style={{ fontSize: 20, fontWeight: 700, color: "var(--brand)" }}>
                 {formatCurrency(formulaModalRow.breakdown.netSalary)}
               </span>
             </Descriptions.Item>

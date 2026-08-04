@@ -205,7 +205,7 @@ export function SettingsPage({
                   size="small"
                   style={{
                     borderRadius: 8,
-                    borderColor: item.id === store.id ? "#1677ff" : undefined,
+                    borderColor: item.id === store.id ? "var(--brand)" : undefined,
                     background: item.status === "archived" ? "#fafafa" : "#fff",
                   }}
                   title={
@@ -270,7 +270,7 @@ export function SettingsPage({
                           onBlur={() => commitConfig(key, drafts[key])}
                         />
                       </Form.Item>
-                      <div style={{ background: "#f8fafc", padding: "6px 10px", borderRadius: 4, fontSize: 12, color: "#1677ff", marginBottom: 16 }}>
+                      <div style={{ background: "#faf6f1", padding: "6px 10px", borderRadius: 4, fontSize: 12, color: "var(--brand)", marginBottom: 16 }}>
                         <BulbOutlined style={{ marginRight: 6 }} />影响预览: {getPreview(currentValue, employeeCount)}
                       </div>
                     </Col>
@@ -296,7 +296,7 @@ export function SettingsPage({
                           {new Date(record.at).toLocaleString("zh-CN")}
                         </Text>
                         <div style={{ fontSize: 13, marginTop: 2 }}>
-                          <span style={{ color: "#8c8c8c" }}>旧值 {record.previousValue}</span> → <Text strong style={{ color: "#1677ff" }}>新值 {record.newValue}</Text>
+                          <span style={{ color: "#8c8c8c" }}>旧值 {record.previousValue}</span> → <Text strong style={{ color: "var(--brand)" }}>新值 {record.newValue}</Text>
                         </div>
                       </div>
                     ),

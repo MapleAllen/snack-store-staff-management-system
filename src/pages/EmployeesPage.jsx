@@ -62,7 +62,7 @@ export function EmployeesPage({ workspace, store, currentMonth, onCreate, onEdit
           style={{ cursor: "pointer" }}
           onClick={() => setHistoryDrawerEmployee(record.employee)}
         >
-          <Avatar style={{ backgroundColor: record.employee.isResigned ? "#d9d9d9" : "#1677ff" }}>
+          <Avatar style={{ backgroundColor: record.employee.isResigned ? "#d9d9d9" : "var(--brand)" }}>
             {record.employee.name.slice(-1)}
           </Avatar>
           <div>

@@ -21,5 +21,8 @@ export default defineConfig({
     // The Electron-first shell keeps a shared Ant Design runtime; business pages themselves are lazy chunks.
     chunkSizeWarningLimit: 900,
   },
+  test: {
+    setupFiles: ["./src/test/setup.js"],
+  },
   plugins: [react()],
 });

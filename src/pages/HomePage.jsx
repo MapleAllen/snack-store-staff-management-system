@@ -97,50 +97,41 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore, on
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
       {/* 顶部主指挥台 - 单一主角突出总额 */}
-      <Card
-        style={{
-          background: "linear-gradient(135deg, #001529 0%, #003a8c 100%)",
-          color: "#fff",
-          borderRadius: 12,
-          boxShadow: "0 4px 16px rgba(0,21,41,0.15)",
-        }}
-        bodyStyle={{ padding: 28 }}
-      >
+      <Card className="hero-card">
         <Row gutter={[24, 24]} align="middle">
           <Col xs={24} lg={13}>
-            <Tag color="blue" style={{ marginBottom: 12, fontSize: 13, padding: "2px 10px" }}>
+            <Tag color="orange" style={{ marginBottom: 12, fontSize: 13, padding: "2px 10px" }}>
               工资管理指挥台 · {activeMonth}
             </Tag>
-            <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 14, marginBottom: 4 }}>
+            <div className="hero-card__label">
               本月预计实发总额
             </div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 16 }}>
-              <span className="tabular-nums" style={{ fontSize: 40, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
+            <div className="hero-card__amount">
+              <span className="tabular-nums hero-card__amount-value">
                 {formatCurrency(totalForecast).replace("￥", "")}
               </span>
-              <span style={{ fontSize: 16, color: "rgba(255,255,255,0.85)" }}>元</span>
-              <Tag
-                color={momDiff > 0 ? "volcano" : momDiff < 0 ? "green" : "blue"}
-                style={{ fontSize: 13, padding: "2px 8px", borderRadius: 4 }}
-              >
-                {momDiff >= 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
-                {momDiff >= 0 ? ` 较上月 +${formatCurrency(momDiff)} (+${momPercent}%)` : ` 较上月 -${formatCurrency(Math.abs(momDiff))} (${momPercent}%)`}
-              </Tag>
+              <span className="hero-card__unit">元</span>
+              {momDiff === 0 ? (
+                <Tag>与上月持平</Tag>
+              ) : (
+                <Tag color={momDiff > 0 ? "volcano" : "green"}>
+                  {momDiff > 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
+                  {` 较上月 ${momDiff > 0 ? "+" : "-"}${formatCurrency(Math.abs(momDiff))}`}
+                  {prevForecast ? ` (${momDiff > 0 ? "+" : ""}${momPercent}%)` : ""}
+                </Tag>
+              )}
             </div>
-            <Paragraph style={{ color: "rgba(255,255,255,0.85)", fontSize: 14, marginBottom: 20 }}>
+            <Paragraph className="hero-card__hint">
               {recommendedAction.hint}
             </Paragraph>
             <Button
               type="primary"
               size="large"
               style={{
-                backgroundColor: "#52c41a",
-                borderColor: "#52c41a",
                 height: 44,
                 fontSize: 16,
                 fontWeight: 600,
                 padding: "0 28px",
-                borderRadius: 8,
               }}
               onClick={() => handleGoTo(recommendedAction.storeId, recommendedAction.employeeId, recommendedAction.targetPage, recommendedAction.isSalaryPending)}
             >
@@ -149,31 +140,24 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore, on
           </Col>
 
           <Col xs={24} lg={11}>
-            <Card
-              size="small"
-              style={{ background: "rgba(255, 255, 255, 0.08)", borderColor: "rgba(255, 255, 255, 0.18)", borderRadius: 8 }}
-              bodyStyle={{ padding: 20 }}
-            >
-              <Text strong style={{ color: "#fff", fontSize: 15, display: "block", marginBottom: 16 }}>
-                月结进度与监控摘要
-              </Text>
+            <Card size="small" title={<Text strong style={{ fontSize: 15 }}>月结进度与监控摘要</Text>}>
               <Row gutter={[12, 16]}>
                 <Col span={8}>
-                  <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>待确认员工</div>
-                  <div style={{ color: totalPending > 0 ? "#faad14" : "#52c41a", fontSize: 24, fontWeight: 700, marginTop: 4 }}>
-                    {totalPending} <span style={{ fontSize: 13, fontWeight: 400 }}>人</span>
+                  <div className="hero-stat__label">待确认员工</div>
+                  <div className={`hero-stat__value ${totalPending > 0 ? "hero-stat__value--warning" : "hero-stat__value--success"}`}>
+                    {totalPending} <span className="hero-stat__unit">人</span>
                   </div>
                 </Col>
                 <Col span={8}>
-                  <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>可直接月结</div>
-                  <div style={{ color: readyStores.length > 0 ? "#52c41a" : "#fff", fontSize: 24, fontWeight: 700, marginTop: 4 }}>
-                    {readyStores.length} <span style={{ fontSize: 13, fontWeight: 400 }}>家</span>
+                  <div className="hero-stat__label">可直接月结</div>
+                  <div className={`hero-stat__value ${readyStores.length > 0 ? "hero-stat__value--success" : ""}`}>
+                    {readyStores.length} <span className="hero-stat__unit">家</span>
                   </div>
                 </Col>
                 <Col span={8}>
-                  <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>阻塞问题项</div>
-                  <div style={{ color: totalBlockers > 0 ? "#ff4d4f" : "#52c41a", fontSize: 24, fontWeight: 700, marginTop: 4 }}>
-                    {totalBlockers} <span style={{ fontSize: 13, fontWeight: 400 }}>项</span>
+                  <div className="hero-stat__label">阻塞问题项</div>
+                  <div className={`hero-stat__value ${totalBlockers > 0 ? "hero-stat__value--danger" : "hero-stat__value--success"}`}>
+                    {totalBlockers} <span className="hero-stat__unit">项</span>
                   </div>
                 </Col>
               </Row>
@@ -218,7 +202,7 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore, on
                 ]}
               >
                 <List.Item.Meta
-                  avatar={<ShopOutlined style={{ fontSize: 18, color: "#1677ff" }} />}
+                  avatar={<ShopOutlined style={{ fontSize: 18, color: "var(--brand)" }} />}
                   title={<Text strong>{item.storeName} · {item.blockerCount} 位员工待处理</Text>}
                   description={
                     <Space direction="vertical" size={2}>
@@ -247,8 +231,8 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore, on
         <Col xs={24} sm={12} lg={6}>
           <StatCard
             label="较上月变动"
-            value={`${momDiff >= 0 ? "+" : ""}${momPercent}%`}
-            hint={`金额 ${momDiff >= 0 ? "+" : "-"}${formatCurrency(Math.abs(momDiff))} (上月 ${formatCurrency(prevForecast)})`}
+            value={momDiff === 0 ? "持平" : `${momDiff > 0 ? "+" : ""}${momPercent}%`}
+            hint={momDiff === 0 ? `上月 ${formatCurrency(prevForecast)}` : `金额 ${momDiff >= 0 ? "+" : "-"}${formatCurrency(Math.abs(momDiff))} (上月 ${formatCurrency(prevForecast)})`}
             accent={momDiff > 0 ? "danger" : momDiff < 0 ? "success" : "default"}
           />
         </Col>
@@ -299,7 +283,7 @@ export function HomePage({ workspace, activeMonth, onNavigate, onSelectStore, on
                   <div style={{ margin: "12px 0" }}>
                     <Text type="secondary" style={{ fontSize: 12, display: "block" }}>本月确认实发金额 / 预计</Text>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4 }}>
-                      <span className="tabular-nums" style={{ fontSize: 22, fontWeight: 700, color: "#1677ff" }}>
+                      <span className="tabular-nums" style={{ fontSize: 22, fontWeight: 700, color: "var(--brand)" }}>
                         {formatCurrency(item.status === "closed" ? item.totals.closed : item.totals.confirmed)}
                       </span>
                       <span style={{ fontSize: 12, color: "#8c8c8c" }}>

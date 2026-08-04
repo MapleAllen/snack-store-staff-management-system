@@ -60,7 +60,7 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
           disabled={isLocked}
           min={0}
           step={0.5}
-          value={record.entry.overtimeHours}
+          value={record.entry.overtimeHours || 0}
           onChange={(val) => patchEntry(record.employee.id, { overtimeHours: val ?? 0 })}
           style={{ width: "100%" }}
         />
@@ -71,7 +71,7 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
       key: "leaveDays",
       width: 120,
       render: (_, record) => {
-        const val = record.entry.leaveDays;
+        const val = record.entry.leaveDays || 0;
         const isExcess = val > 31;
         return (
           <Tooltip title={isExcess ? "提示：请假天数大于 31 天，请确认是否误输入" : ""}>
@@ -93,7 +93,7 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
       key: "leaveHours",
       width: 120,
       render: (_, record) => {
-        const val = record.entry.leaveHours;
+        const val = record.entry.leaveHours || 0;
         const isExcess = val > 200;
         return (
           <Tooltip title={isExcess ? "提示：请假小时较大，建议换算为请假天数" : ""}>
@@ -121,7 +121,7 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
                 disabled={isLocked}
                 min={0}
                 step={0.5}
-                value={record.entry.nightShiftHours}
+                value={record.entry.nightShiftHours || 0}
                 onChange={(val) => patchEntry(record.employee.id, { nightShiftHours: val ?? 0 })}
                 style={{ width: "100%" }}
               />
@@ -172,8 +172,8 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
 
         const btn = record.entry.isComplete ? (
           <Button
-            type="primary"
-            style={{ backgroundColor: "#52c41a", borderColor: "#52c41a" }}
+            color="green"
+            variant="solid"
             disabled={isLocked}
             icon={<CheckCircleOutlined />}
             onClick={() => toggleComplete(record.employee.id, false)}
@@ -306,10 +306,10 @@ export function AttendancePage({ store, activeMonth, rows, patchEntry, toggleCom
                     <Tag color={row.entry.isComplete ? "success" : "warning"}>{row.entry.isComplete ? "已确认" : "待确认"}</Tag>
                   </div>
                   <div className="mobile-input-grid">
-                    <label><span>加班小时</span><InputNumber disabled={isLocked} min={0} step={0.5} value={row.entry.overtimeHours} onChange={(value) => patchEntry(row.employee.id, { overtimeHours: value ?? 0 })} /></label>
-                    <label><span>请假天数</span><InputNumber disabled={isLocked} min={0} step={0.5} value={row.entry.leaveDays} onChange={(value) => patchEntry(row.employee.id, { leaveDays: value ?? 0 })} /></label>
-                    <label><span>请假小时</span><InputNumber disabled={isLocked} min={0} step={0.5} value={row.entry.leaveHours} onChange={(value) => patchEntry(row.employee.id, { leaveHours: value ?? 0 })} /></label>
-                    {store.config.nightShiftRate > 0 ? <label><span>夜班小时</span><InputNumber disabled={isLocked} min={0} step={0.5} value={row.entry.nightShiftHours} onChange={(value) => patchEntry(row.employee.id, { nightShiftHours: value ?? 0 })} /></label> : null}
+                    <label><span>加班小时</span><InputNumber disabled={isLocked} min={0} step={0.5} value={row.entry.overtimeHours || 0} onChange={(value) => patchEntry(row.employee.id, { overtimeHours: value ?? 0 })} /></label>
+                    <label><span>请假天数</span><InputNumber disabled={isLocked} min={0} step={0.5} value={row.entry.leaveDays || 0} onChange={(value) => patchEntry(row.employee.id, { leaveDays: value ?? 0 })} /></label>
+                    <label><span>请假小时</span><InputNumber disabled={isLocked} min={0} step={0.5} value={row.entry.leaveHours || 0} onChange={(value) => patchEntry(row.employee.id, { leaveHours: value ?? 0 })} /></label>
+                    {store.config.nightShiftRate > 0 ? <label><span>夜班小时</span><InputNumber disabled={isLocked} min={0} step={0.5} value={row.entry.nightShiftHours || 0} onChange={(value) => patchEntry(row.employee.id, { nightShiftHours: value ?? 0 })} /></label> : null}
                   </div>
                   <div className="mobile-record-control"><Text type="secondary">全勤/稽核</Text><Switch disabled={isLocked} checked={row.entry.auditPassed} checkedChildren="达标" unCheckedChildren="未达标" onChange={(checked) => patchEntry(row.employee.id, { auditPassed: checked })} /></div>
                   <Select disabled={isLocked} allowClear value={row.entry.attendanceReason || undefined} placeholder="选择考勤业务原因" options={ATTENDANCE_REASONS.map((reason) => ({ value: reason, label: reason }))} onChange={(attendanceReason) => patchEntry(row.employee.id, { attendanceReason: attendanceReason ?? "" })} style={{ width: "100%" }} />

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button } from "antd";
 
 export function LockScreen({ onUnlock }) {
   const [pin, setPin] = useState("");
@@ -50,9 +51,9 @@ export function LockScreen({ onUnlock }) {
             disabled={busy}
           />
           {error ? <p className="lock-screen__error">{error}</p> : null}
-          <button className="primary-button" type="submit" disabled={pin.length < 4 || busy}>
+          <Button type="primary" htmlType="submit" disabled={pin.length < 4 || busy}>
             {busy ? "验证中…" : "解锁"}
-          </button>
+          </Button>
         </form>
       </div>
     </div>

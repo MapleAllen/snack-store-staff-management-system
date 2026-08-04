@@ -1,10 +1,11 @@
 :root {
   color-scheme: light;
-  --bg: #f4f7fb;
+  --bg: #faf6f1;
   --panel: #ffffff;
-  --ink: #0f172a;
-  --muted: #5b6474;
-  --brand: #1677ff;
+  --ink: #2e2620;
+  --muted: #7a6c61;
+  --brand: #e8622c;
+  --brand-strong: #c84f1f;
   --success: #52c41a;
   --warning: #faad14;
   --danger: #ff4d4f;
@@ -48,19 +49,8 @@ textarea {
 
 /* StatCard accent backgrounds */
 .stat-card--primary {
-  background: #001529;
-}
-
-.stat-card--primary .ant-statistic-title {
-  color: rgba(255, 255, 255, 0.75);
-}
-
-.stat-card--primary .ant-statistic-content {
-  color: #fff;
-}
-
-.stat-card--primary .stat-card__hint {
-  color: rgba(255, 255, 255, 0.75);
+  background: linear-gradient(135deg, #fff4e8 0%, #ffe6d1 100%);
+  border-color: #f2d3b9;
 }
 
 .stat-card--warning {
@@ -73,6 +63,79 @@ textarea {
 
 .stat-card--danger {
   background: #fff1f0;
+}
+
+/* 首页指挥台 hero（暖色浅底，突出唯一主行动） */
+.hero-card {
+  background: linear-gradient(120deg, #fff4e8 0%, #ffe6d1 100%);
+  border: 1px solid #f2d3b9;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(190, 110, 50, 0.1);
+}
+
+.hero-card .ant-card-body {
+  padding: 28px;
+}
+
+.hero-card__label {
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.hero-card__amount {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.hero-card__amount-value {
+  font-size: 40px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.hero-card__unit {
+  font-size: 16px;
+  color: var(--muted);
+}
+
+.hero-card__hint {
+  color: #5c4f45;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.hero-stat__label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.hero-stat__value {
+  font-size: 24px;
+  font-weight: 700;
+  margin-top: 4px;
+  color: var(--ink);
+}
+
+.hero-stat__value--warning {
+  color: var(--warning);
+}
+
+.hero-stat__value--success {
+  color: var(--success);
+}
+
+.hero-stat__value--danger {
+  color: var(--danger);
+}
+
+.hero-stat__unit {
+  font-size: 13px;
+  font-weight: 400;
 }
 
 /* Attendance & Payroll Table Row Status Colors */
@@ -93,7 +156,7 @@ textarea {
 }
 
 .row-status-selected {
-  background-color: #e6f4ff !important;
+  background-color: #fdeee2 !important;
 }
 
 /* Sticky right detail panel styling */
@@ -110,10 +173,10 @@ textarea {
 }
 
 .modal-summary {
-  background: #f8fafc;
+  background: #faf6f1;
   border-radius: 8px;
   padding: 12px 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #ece0d4;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -148,9 +211,9 @@ textarea {
   grid-template-columns: 1fr 1fr;
   gap: 0.65rem;
   padding: 0.8rem;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(46, 38, 32, 0.08);
   border-radius: 12px;
-  background: rgba(242, 246, 245, 0.72);
+  background: rgba(250, 246, 241, 0.72);
 }
 
 .adjustment-grid__head {
@@ -167,7 +230,7 @@ textarea {
 .adjustment-row__new {
   min-width: 0;
   padding: 0.75rem;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(46, 38, 32, 0.08);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.82);
 }
@@ -187,76 +250,21 @@ textarea {
   font-weight: 700;
 }
 
-/* Modal form fields (used by App.jsx and SettingsPage modals) */
+/* Modal form field wrappers (label + antd control stacked) */
 .field {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.field span {
+.field > span {
   font-size: 13px;
   color: var(--muted);
 }
 
-.field input,
-.field select,
-.field textarea {
+.field .ant-select,
+.field .ant-input-number {
   width: 100%;
-  padding: 0.62rem 0.8rem;
-  border: 1px solid rgba(15, 23, 42, 0.18);
-  border-radius: 8px;
-  background: #fff;
-  color: var(--ink);
-  outline: none;
-}
-
-.field textarea {
-  min-height: 100px;
-  resize: vertical;
-}
-
-.field input:focus,
-.field select:focus,
-.field textarea:focus {
-  border-color: #1677ff;
-  box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.12);
-}
-
-/* Modal action buttons (App.jsx, LockScreen, RecoveryScreen) */
-.primary-button,
-.secondary-button,
-.danger-button {
-  padding: 0.62rem 1.1rem;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  font-size: 14px;
-  cursor: pointer;
-  transition: opacity 160ms ease;
-}
-
-.primary-button {
-  background: #1677ff;
-  color: #fff;
-}
-
-.secondary-button {
-  background: #fff;
-  color: var(--ink);
-  border-color: rgba(15, 23, 42, 0.18);
-}
-
-.danger-button {
-  background: #fff1f0;
-  color: #ff4d4f;
-  border-color: rgba(255, 77, 79, 0.35);
-}
-
-.primary-button:disabled,
-.secondary-button:disabled,
-.danger-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* Lock screen & recovery screen */
@@ -266,7 +274,7 @@ textarea {
   justify-content: center;
   min-height: 100dvh;
   padding: 1.5rem;
-  background: linear-gradient(180deg, #f4f7fb, #edf1f7);
+  background: linear-gradient(180deg, #faf6f1, #f3ebe2);
 }
 
 .lock-screen__card {
@@ -275,10 +283,10 @@ textarea {
   justify-items: center;
   width: min(100%, 24rem);
   padding: 2.2rem 2rem;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(46, 38, 32, 0.08);
   border-radius: 20px;
   background: var(--panel);
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 18px 44px rgba(46, 38, 32, 0.06);
   text-align: center;
 }
 
@@ -322,13 +330,13 @@ textarea {
 .lock-screen__dot {
   width: 0.95rem;
   height: 0.95rem;
-  border: 1.5px solid rgba(15, 23, 42, 0.18);
+  border: 1.5px solid rgba(46, 38, 32, 0.18);
   border-radius: 50%;
 }
 
 .lock-screen__dot--filled {
-  border-color: #1677ff;
-  background: #1677ff;
+  border-color: var(--brand);
+  background: var(--brand);
 }
 
 .lock-screen__input {
@@ -350,19 +358,7 @@ textarea {
   margin-top: 0.5rem;
 }
 
-/* Toast notice & empty state */
-.toast {
-  position: fixed;
-  right: 1rem;
-  bottom: 1rem;
-  padding: 0.9rem 1rem;
-  border-radius: 12px;
-  background: rgba(18, 28, 27, 0.96);
-  color: #fff;
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.2);
-  z-index: 30;
-}
-
+/* Empty state */
 .app-empty {
   color: var(--muted);
   text-align: center;
@@ -389,8 +385,8 @@ textarea {
 }
 
 .mobile-record-card--selected {
-  border-color: #1677ff;
-  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(232, 98, 44, 0.1);
 }
 
 .mobile-record-heading,
@@ -451,7 +447,7 @@ textarea {
 }
 
 .mobile-payroll-amount strong {
-  color: #1677ff;
+  color: var(--brand);
   font-size: 20px;
 }
 
@@ -461,7 +457,7 @@ textarea {
   gap: 16px;
   padding: 14px 16px;
   border-radius: 10px;
-  background: #f8fafc;
+  background: #faf6f1;
 }
 
 .payout-summary > div,
@@ -471,7 +467,7 @@ textarea {
 }
 
 .payout-roster {
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid #f0e7de;
 }
 
 .payout-roster__row {
@@ -480,7 +476,7 @@ textarea {
   align-items: center;
   gap: 12px;
   padding: 12px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid #f0e7de;
 }
 
 .print-salary-slips {
@@ -554,6 +550,14 @@ textarea {
     min-height: 40px;
   }
 
+  .hero-card .ant-card-body {
+    padding: 20px;
+  }
+
+  .hero-card__amount-value {
+    font-size: 32px;
+  }
+
   .sticky-panel {
     position: static;
   }
@@ -602,11 +606,11 @@ textarea {
   body * {
     visibility: hidden;
   }
-  
+
   .print-salary-slips, .print-salary-slips * {
     visibility: visible;
   }
-  
+
   .print-salary-slips {
     display: block;
     position: absolute;
